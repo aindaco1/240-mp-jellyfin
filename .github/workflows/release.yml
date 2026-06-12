@@ -12,7 +12,7 @@ jobs:
   # ──────────────────────────────────────────────────────────────────────────────
   build-macos-arm64:
     name: macOS arm64
-    runs-on: macos-latest
+    runs-on: macos-26
 
     steps:
       - name: Checkout
@@ -27,13 +27,14 @@ jobs:
           arch: clang_64
           cache: true
 
-      - name: Install mpv
-        run: brew install mpv
+      - name: Install package helpers
+        run: brew install mpv ffmpeg
 
       - name: Configure
         run: |
           cmake -B build \
             -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
             -DCMAKE_PREFIX_PATH="${QT_ROOT_DIR}" \
             -DCMAKE_INSTALL_PREFIX="${GITHUB_WORKSPACE}/install"
 
@@ -45,7 +46,7 @@ jobs:
 
       - name: Deploy Qt frameworks
         run: |
-          APP="${GITHUB_WORKSPACE}/install/240mp.app"
+          APP="${GITHUB_WORKSPACE}/install/240-mp-jellyfin.app"
           "${QT_ROOT_DIR}/bin/macdeployqt" "$APP" -qmldir="${GITHUB_WORKSPACE}" -verbose=2
 
       - name: Import signing certificate
@@ -67,20 +68,27 @@ jobs:
 
       - name: Sign app
         run: |
-          APP="${GITHUB_WORKSPACE}/install/240mp.app"
+          APP="${GITHUB_WORKSPACE}/install/240-mp-jellyfin.app"
           IDENTITY="Developer ID Application"
           find "$APP/Contents/Frameworks" \( -name "*.dylib" -o -name "*.framework" \) \
             -exec codesign --force --options runtime --sign "$IDENTITY" {} \;
+          if [ -d "$APP/Contents/Resources/bin" ]; then
+            find "$APP/Contents/Resources/bin" -type f | while read -r helper; do
+              if [ -x "$helper" ]; then
+                codesign --force --options runtime --sign "$IDENTITY" "$helper"
+              fi
+            done
+          fi
           codesign --force --deep --options runtime --sign "$IDENTITY" "$APP"
           codesign --verify --deep --strict "$APP"
 
       - name: Create DMG
         run: |
           hdiutil create \
-            -volname "240-MP" \
+            -volname "240-mp-jellyfin" \
             -srcfolder "${GITHUB_WORKSPACE}/install" \
             -ov -format UDZO \
-            "240-MP-${{ github.ref_name }}-macOS-arm64.dmg"
+            "240-mp-jellyfin-${{ github.ref_name }}-macOS-arm64.dmg"
 
       - name: Notarize and staple
         env:
@@ -88,7 +96,7 @@ jobs:
           APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          DMG="240-MP-${{ github.ref_name }}-macOS-arm64.dmg"
+          DMG="240-mp-jellyfin-${{ github.ref_name }}-macOS-arm64.dmg"
           xcrun notarytool submit "$DMG" \
             --apple-id "$APPLE_ID" \
             --password "$APPLE_APP_PASSWORD" \
@@ -104,59 +112,7 @@ jobs:
         uses: actions/upload-artifact@v4.6.2
         with:
           name: dmg-arm64
-          path: "240-MP-*-macOS-arm64.dmg"
-          if-no-files-found: error
-
-  # ──────────────────────────────────────────────────────────────────────────────
-  # Linux arm64 — targets Raspberry Pi OS Trixie (Debian 13)
-  # Uses GitHub's native arm64 runner; no QEMU needed.
-  # ──────────────────────────────────────────────────────────────────────────────
-  build-linux-arm64:
-    name: Linux arm64
-    runs-on: ubuntu-24.04-arm
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4.2.2
-
-      - name: Install build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential \
-            cmake \
-            qt6-base-dev \
-            qt6-declarative-dev \
-            libqt6svg6 \
-            qt6-svg-dev \
-            qml6-module-qtquick \
-            qml6-module-qtquick-controls \
-            qml6-module-qtquick-window \
-            libdrm-dev \
-            libssl-dev
-
-      - name: Configure
-        run: |
-          cmake -B build \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_INSTALL_PREFIX="${GITHUB_WORKSPACE}/install/usr/local"
-
-      - name: Build
-        run: cmake --build build --parallel
-
-      - name: Install
-        run: cmake --install build
-
-      - name: Create tarball
-        run: |
-          cd "${GITHUB_WORKSPACE}/install"
-          tar -czf "${GITHUB_WORKSPACE}/240-MP-${{ github.ref_name }}-linux-arm64.tar.gz" .
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4.6.2
-        with:
-          name: tarball-linux-arm64
-          path: "240-MP-*-linux-arm64.tar.gz"
+          path: "240-mp-jellyfin-*-macOS-arm64.dmg"
           if-no-files-found: error
 
   # ──────────────────────────────────────────────────────────────────────────────
@@ -164,7 +120,7 @@ jobs:
   # ──────────────────────────────────────────────────────────────────────────────
   release:
     name: Publish Release
-    needs: [build-macos-arm64, build-linux-arm64]
+    needs: [build-macos-arm64]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -182,27 +138,22 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          name: "240-MP ${{ github.ref_name }}"
+          name: "240-mp-jellyfin ${{ github.ref_name }}"
           draft: false
           prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-alpha') }}
           files: |
             artifacts/dmg-arm64/*.dmg
-            artifacts/tarball-linux-arm64/*.tar.gz
-            scripts/install.sh
           body: |
             ### Downloads:
 
             | Platform | File |
             |---|---|
-            | Raspberry Pi OS Trixie (arm64) | `240-MP-${{ github.ref_name }}-linux-arm64.tar.gz` |
-            | macOS (Apple Silicon) | `240-MP-${{ github.ref_name }}-macOS-arm64.dmg` |
+            | macOS (Apple Silicon) | `240-mp-jellyfin-${{ github.ref_name }}-macOS-arm64.dmg` |
 
             ### Install Instructions:
 
-            - Raspberry Pi OS Trixie (arm64): [Instructions](INSTALL.md#on-a-raspberry-pi)
-            - macOS (Apple Silicon): Download the `.dmg`, open and move 240mp.app to your applications folder
+            - macOS (Apple Silicon): Download the `.dmg`, open and move 240-mp-jellyfin.app to your Applications folder
 
             ### Update Instructions:
 
-            - Raspberry Pi OS Trixie (arm64): [Instructions](INSTALL.md#update)
-            - macOS (Apple Silicon): Download the `.dmg`, open and move 240mp.app to your applications folder
+            - macOS (Apple Silicon): Download the `.dmg`, open and replace 240-mp-jellyfin.app in your Applications folder

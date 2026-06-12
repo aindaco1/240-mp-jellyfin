@@ -9,6 +9,10 @@ FocusScope {
 
     property string filePath:    navParams.filePath || ""
     property string itemTitle:   navParams.title    || ""
+    property int    audioTrack:  navParams.audioTrack || 0
+    property int    subtitleTrack: (navParams.subtitleTrack !== undefined && navParams.subtitleTrack !== null)
+                                  ? navParams.subtitleTrack : -1
+    property var    subtitleFiles: navParams.subtitleFiles || []
 
     property bool   overlayVisible:      false
     property int    savedPositionMs:     0
@@ -32,6 +36,13 @@ FocusScope {
 
     focus: true
 
+    function launchPlayback(startSeconds, playlistStart, useShuffle) {
+        mpvController.loadAndPlay(filePath, startSeconds,
+                                  audioTrack, subtitleTrack, subtitleFiles,
+                                  loopOn, playlistStart, 0.0, "",
+                                  false, "", useShuffle || false)
+    }
+
     Keys.onPressed: function(event) {
         if (overlayVisible) {
             if (event.key === Qt.Key_Escape || event.key === Qt.Key_Backspace || event.key === Qt.Key_Back) {
@@ -49,7 +60,7 @@ FocusScope {
                 if (choiceIndex === 0 && startPlPos >= 0)
                     resumedFromPlaylistPos = startPlPos
                 overlayVisible = false
-                mpvController.loadAndPlay(filePath, startMs / 1000.0, 0, -1, [], loopOn, startPlPos)
+                launchPlayback(startMs / 1000.0, startPlPos, false)
                 event.accepted = true
             }
         } else {
@@ -135,12 +146,12 @@ FocusScope {
         // Shuffle wins: a shuffled playlist starts fresh & random; resume position
         // (a sequential item index) is meaningless once order is randomized.
         if (shuffleOn && isPlaylist(filePath)) {
-            mpvController.loadAndPlay(filePath, 0.0, 0, -1, [], loopOn, -1, 0.0, "", false, "", true)
+            launchPlayback(0.0, -1, true)
             return
         }
 
         if (resumeSetting === "no") {
-            mpvController.loadAndPlay(filePath, 0.0, 0, -1, [], loopOn, -1)
+            launchPlayback(0.0, -1, false)
             return
         }
 
@@ -151,15 +162,16 @@ FocusScope {
         if (resumeSetting === "yes") {
             if (savedPos > 0 && savedPl >= 0)
                 resumedFromPlaylistPos = savedPl
-            mpvController.loadAndPlay(filePath, savedPos > 0 ? savedPos / 1000.0 : 0.0,
-                                      0, -1, [], loopOn, savedPos > 0 ? savedPl : -1)
+            launchPlayback(savedPos > 0 ? savedPos / 1000.0 : 0.0,
+                           savedPos > 0 ? savedPl : -1,
+                           false)
         } else {
             if (savedPos > 0) {
                 savedPositionMs  = savedPos
                 savedPlaylistPos = savedPl
                 overlayVisible   = true
             } else {
-                mpvController.loadAndPlay(filePath, 0.0, 0, -1, [], loopOn, -1)
+                launchPlayback(0.0, -1, false)
             }
         }
     }

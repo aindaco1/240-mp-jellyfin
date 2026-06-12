@@ -57,7 +57,7 @@ FocusScope {
 
         // SYSTEM section
         items.push({ type: "section", label: "System:" })
-        items.push({ type: "quit", label: "Quit 240-MP" })
+        items.push({ type: "quit", label: "Quit 240-mp-jellyfin" })
 
         settingsItems = items
 

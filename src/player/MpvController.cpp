@@ -1,12 +1,80 @@
 #include "MpvController.h"
+#include <QCoreApplication>
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QProcessEnvironment>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QStandardPaths>
 #include <QDateTime>
 #include <QDebug>
+#include <QRegularExpression>
+#include <QTemporaryFile>
+#include <QUrl>
+#include <QUrlQuery>
+
+static QString executablePathIfUsable(const QString &path) {
+    const QFileInfo info(path);
+    if (info.isFile() && info.isExecutable())
+        return info.absoluteFilePath();
+    return {};
+}
+
+static QString redactedUrlForLog(const QString &value) {
+    QUrl url(value);
+    if (!url.isValid() || url.scheme().isEmpty())
+        return value;
+
+    QUrlQuery query(url);
+    bool changed = false;
+    const QStringList sensitiveKeys = {
+        QStringLiteral("api_key"),
+        QStringLiteral("access_token"),
+        QStringLiteral("X-Plex-Token"),
+        QStringLiteral("token")
+    };
+    for (const QString &key : sensitiveKeys) {
+        if (query.hasQueryItem(key)) {
+            query.removeAllQueryItems(key);
+            query.addQueryItem(key, QStringLiteral("<redacted>"));
+            changed = true;
+        }
+    }
+    if (changed)
+        url.setQuery(query);
+    return url.toString();
+}
+
+static QString redactedArgForLog(const QString &arg) {
+    if (arg.startsWith(QStringLiteral("--http-header-fields")) ||
+        arg.contains(QStringLiteral("X-Plex-Token:"), Qt::CaseInsensitive) ||
+        arg.contains(QStringLiteral("X-Emby-Token:"), Qt::CaseInsensitive) ||
+        arg.contains(QStringLiteral("Authorization:"), Qt::CaseInsensitive)) {
+        return QStringLiteral("--http-header-fields=<redacted>");
+    }
+    if (arg.startsWith(QStringLiteral("--include=")) &&
+        arg.contains(QStringLiteral("http-headers"))) {
+        return QStringLiteral("--include=<private-http-headers>");
+    }
+    return redactedUrlForLog(arg);
+}
+
+static QStringList redactedArgsForLog(const QStringList &args) {
+    QStringList redacted;
+    redacted.reserve(args.size());
+    for (const QString &arg : args)
+        redacted << redactedArgForLog(arg);
+    return redacted;
+}
+
+static QString redactedTextForLog(QString text) {
+    text.replace(QRegularExpression("(?i)(api_key|access_token|token|X-Plex-Token)=([^&\\s]+)"),
+                 "\\1=<redacted>");
+    text.replace(QRegularExpression("(?i)(X-Emby-Token|X-Plex-Token|Authorization):[^\\r\\n]*"),
+                 "\\1:<redacted>");
+    return text;
+}
 
 #ifdef Q_OS_LINUX
 #include <fcntl.h>
@@ -25,7 +93,7 @@
 // Write a fontconfig override so the mpv subprocess's libass can find custom
 // fonts without needing them installed system-wide.
 static QString writeFontconfigOverride(const QString &fontsDir) {
-    const QString path = QDir::tempPath() + "/240mp-fonts.conf";
+    const QString path = QDir::tempPath() + "/240-mp-jellyfin-fonts.conf";
     QFile f(path);
     if (!f.open(QFile::WriteOnly | QFile::Text))
         return {};
@@ -44,9 +112,9 @@ static QString writeFontconfigOverride(const QString &fontsDir) {
 MpvController::MpvController(const QString &appRoot, QObject *parent)
     : QObject(parent)
     , m_appRoot(appRoot)
-    , m_socketPath(QDir::tempPath() + "/240mp-mpv.sock")
-    , m_inputConfPath(QDir::tempPath() + "/240mp-input.conf")
-    , m_logFilePath(QDir::tempPath() + "/240mp-mpv.log")
+    , m_socketPath(QDir::tempPath() + "/240-mp-jellyfin-mpv.sock")
+    , m_inputConfPath(QDir::tempPath() + "/240-mp-jellyfin-input.conf")
+    , m_logFilePath(QDir::tempPath() + "/240-mp-jellyfin-mpv.log")
 {
     QFile f(m_inputConfPath);
     if (f.open(QFile::WriteOnly | QFile::Text)) {
@@ -90,6 +158,43 @@ MpvController::~MpvController() {
         m_process->terminate();
         m_process->waitForFinished(2000);
     }
+    removeHttpHeaderConfig();
+}
+
+QString MpvController::writeHttpHeaderConfig(const QStringList &httpHeaderFields) {
+    QStringList cleaned;
+    for (const QString &header : httpHeaderFields) {
+        const QString trimmed = header.trimmed();
+        if (!trimmed.isEmpty() && !trimmed.contains('\n') && !trimmed.contains('\r'))
+            cleaned << trimmed;
+    }
+    if (cleaned.isEmpty())
+        return {};
+
+    QTemporaryFile file(QDir::tempPath() + "/240-mp-jellyfin-http-headers.XXXXXX.conf");
+    file.setAutoRemove(false);
+    if (!file.open()) {
+        qWarning("[MpvController] Could not create private mpv HTTP header config");
+        return {};
+    }
+
+    file.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner);
+    for (const QString &header : cleaned) {
+        file.write("http-header-fields-append=");
+        file.write(header.toUtf8());
+        file.write("\n");
+    }
+    const QString path = file.fileName();
+    file.close();
+    QFile::setPermissions(path, QFileDevice::ReadOwner | QFileDevice::WriteOwner);
+    return path;
+}
+
+void MpvController::removeHttpHeaderConfig() {
+    if (!m_httpHeaderConfPath.isEmpty()) {
+        QFile::remove(m_httpHeaderConfPath);
+        m_httpHeaderConfPath.clear();
+    }
 }
 
 void MpvController::loadAndPlay(const QString &url, float startSeconds,
@@ -97,7 +202,8 @@ void MpvController::loadAndPlay(const QString &url, float startSeconds,
                                  const QStringList &subFiles, bool loop,
                                  int playlistStart, float transcodeOffsetSec,
                                  const QString &plexToken, bool muteAudio,
-                                 const QString &oscMode, bool shuffle) {
+                                 const QString &oscMode, bool shuffle,
+                                 const QStringList &httpHeaderFields) {
     if (m_process) {
         m_process->disconnect();
         if (m_process->state() != QProcess::NotRunning) {
@@ -110,6 +216,7 @@ void MpvController::loadAndPlay(const QString &url, float startSeconds,
     m_watchdogTimer->stop();
     m_ipc->abort();
     QFile::remove(m_socketPath);
+    removeHttpHeaderConfig();
     m_position    = 0;
     m_duration    = 0;
     m_playlistPos = -1;
@@ -126,9 +233,17 @@ void MpvController::loadAndPlay(const QString &url, float startSeconds,
         }
     }
 #endif
-    const QString bin = QStandardPaths::findExecutable("mpv");
+    QString bin = executablePathIfUsable(QDir(m_appRoot).filePath("bin/mpv"));
+#ifdef Q_OS_MACOS
     if (bin.isEmpty()) {
-        qWarning("[MpvController] mpv not found in PATH");
+        const QDir appDir(QCoreApplication::applicationDirPath());
+        bin = executablePathIfUsable(appDir.filePath("../Resources/bin/mpv"));
+    }
+#endif
+    if (bin.isEmpty())
+        bin = QStandardPaths::findExecutable("mpv");
+    if (bin.isEmpty()) {
+        qWarning("[MpvController] mpv not found in app bundle or PATH");
         QTimer::singleShot(0, this, [this]() { emit playbackFinished(0, 0); });
         return;
     }
@@ -141,9 +256,9 @@ void MpvController::loadAndPlay(const QString &url, float startSeconds,
     {
         QFile lf(m_logFilePath);
         if (lf.open(QFile::Append | QFile::Text)) {
-            lf.write(QString("\n=== 240-MP session start %1 ===\n    url: %2\n\n")
+            lf.write(QString("\n=== 240-mp-jellyfin session start %1 ===\n    url: %2\n\n")
                          .arg(QDateTime::currentDateTime().toString(Qt::ISODate))
-                         .arg(url)
+                         .arg(redactedUrlForLog(url))
                          .toUtf8());
         }
     }
@@ -181,10 +296,16 @@ void MpvController::loadAndPlay(const QString &url, float startSeconds,
         args << QStringLiteral("--shuffle");
     if (muteAudio)
         args << QStringLiteral("--no-audio");
+
+    QStringList playbackHeaders = httpHeaderFields;
     if (!plexToken.isEmpty()) {
-        args << QString("--http-header-fields=X-Plex-Token:%1").arg(plexToken);
+        playbackHeaders << QString("X-Plex-Token:%1").arg(plexToken);
         // Plex URLs are direct file paths — yt-dlp hook is not needed and causes
         // spurious 401 errors when mpv encounters a non-2xx response from PMS.
+    }
+    m_httpHeaderConfPath = writeHttpHeaderConfig(playbackHeaders);
+    if (!m_httpHeaderConfPath.isEmpty()) {
+        args << QString("--include=%1").arg(m_httpHeaderConfPath);
         args << QStringLiteral("--ytdl=no");
     }
 
@@ -202,7 +323,7 @@ void MpvController::loadAndPlay(const QString &url, float startSeconds,
     connect(m_process, &QProcess::readyRead, this, [this]() {
         const QByteArray out = m_process->readAll();
         if (!out.isEmpty())
-            qWarning("[mpv] %s", out.trimmed().constData());
+            qWarning("[mpv] %s", qPrintable(redactedTextForLog(QString::fromUtf8(out).trimmed())));
     });
 
     m_headlessMode = detectHeadlessMode();
@@ -284,7 +405,7 @@ void MpvController::loadAndPlay(const QString &url, float startSeconds,
         args << QString("--input-conf=%1").arg(m_inputConfPath)
              << "--video-sync=audio"
              << "--fullscreen" << "--no-native-fs";
-        qDebug("[MpvController] desktop launch: mpv %s", qPrintable(args.join(" ")));
+        qDebug("[MpvController] desktop launch: mpv %s", qPrintable(redactedArgsForLog(args).join(" ")));
         m_process->start(bin, args);
         m_connectTimer->start();
     }
@@ -344,7 +465,7 @@ void MpvController::onProcessFinished() {
     if (m_process) {
         const QByteArray remaining = m_process->readAll();
         if (!remaining.isEmpty())
-            qWarning("[mpv] %s", remaining.trimmed().constData());
+            qWarning("[mpv] %s", qPrintable(redactedTextForLog(QString::fromUtf8(remaining).trimmed())));
     }
     if (exitCode != 0)
         qWarning("[MpvController] mpv exited with code %d", exitCode);
@@ -352,6 +473,7 @@ void MpvController::onProcessFinished() {
     m_watchdogTimer->stop();
     m_ipc->abort();
     QFile::remove(m_socketPath);
+    removeHttpHeaderConfig();
     const int pos = m_position;
     const int dur = m_duration;
     m_position = 0;
@@ -369,7 +491,7 @@ void MpvController::onProcessFinished() {
             doHeadlessRestore(pos, dur);
         });
     } else {
-        if (exitCode == 2)
+        if (exitCode != 0)
             emit playbackFailed();
         else
             emit playbackFinished(pos, dur);

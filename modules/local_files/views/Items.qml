@@ -82,7 +82,7 @@ FocusScope {
                     { folderPath: item.path, folderName: item.name },
                     { currentIndex: fileList.currentIndex })
             } else {
-                navigateTo("Player.qml",
+                navigateTo("Detail.qml",
                     { filePath: item.path, title: item.name },
                     { currentIndex: fileList.currentIndex })
             }

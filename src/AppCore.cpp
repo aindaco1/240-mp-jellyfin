@@ -40,6 +40,7 @@ AppCore::AppCore(const QString &appRoot, const QString &dataRoot, QObject *paren
         m.entryQml = entryQml;
         m.iconRel  = manifest["icon"].toString();
         m.settings = manifest["settings"].toArray().toVariantList();
+        m.hidden   = manifest["hidden"].toBool(false);
         m_modules.append(m);
         qDebug("[AppCore] Loaded manifest: %s", qPrintable(id));
     }
@@ -83,6 +84,11 @@ void AppCore::scan_for_modules() {
 
     QVariantList displayData;
     for (const auto &m : m_modules) {
+        if (m.hidden) {
+            qDebug("[AppCore] Module hidden: %s", qPrintable(m.name));
+            continue;
+        }
+
         // Respect "enabled" setting; fall back to manifest default, then true
         QJsonObject mCfg = modulesConfig[m.id].toObject();
         bool manifestDefault = true;
@@ -272,6 +278,8 @@ QString AppCore::get_module_auth_state(const QString &moduleId) {
 QVariant AppCore::get_installed_modules() {
     QVariantList result;
     for (const auto &m : m_modules) {
+        if (m.hidden)
+            continue;
         result.append(QVariantMap{
             {"id",           m.id},
             {"name",         m.name},

@@ -1,6 +1,6 @@
-# 240-MP Architecture
+# 240-mp-jellyfin Architecture
 
-240-MP is a retro VCR-style media app built with **C++ Qt6 + QML**, targeting **Raspberry Pi 4** and **macOS**. and this is the reference for working on 240-MP's code (whether you're adding a new module or changing an existing one). 
+240-mp-jellyfin is a retro VCR-style media app built with **C++ Qt 6 + QML**, targeting **Apple Silicon macOS**. This is the reference for working on the fork's code, whether you are adding a new module or changing an existing one.
 
 If you just want to install or build the app, see [INSTALL.md](INSTALL.md) and [BUILDING.md](BUILDING.md). 
 
@@ -8,18 +8,18 @@ If you want to contribute, please start with [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Philosophy
 
-Think of 240-MP as a **browsing shell** that hands off to **purpose-built tools**.
+Think of 240-mp-jellyfin as a **browsing shell** that hands off to **purpose-built tools**.
 
-- The app shell handles browsing, auth, and settings
-- **Modules** are self-contained media integrations (Local Files, Plex, Ambient Mode, etc...) that the shell discovers and loads at startup.
-- When a user picks something to play, the shell hands off to a dedicated fullscreen tool and resumes when that tool exits. For video, that tool is **mpv**, launched as a subprocess by `MpvController`. mpv is installed separately (`apt install mpv` / `brew install mpv`).  240-MP does not link against libmpv.
+- The app shell handles browsing, auth, and settings.
+- **Modules** are self-contained media integrations that the shell discovers and loads at startup.
+- When a user picks something to play, the shell hands off to **mpv**, launched as a subprocess by `MpvController`. Development builds can use mpv from `PATH`; packaged macOS builds bundle mpv and its non-system dynamic libraries. The app does not link against libmpv.
 
 The guiding idea: **browse structured content, then hand off to the right tool for the job** rather than bundling everything into one binary.
 
 ## Project Structure
 
 ```
-240-mp/
+240-mp-jellyfin/
   src/                              # C++ source
     main.cpp                        # app entry point — engine setup, context properties, registerModule calls
     AppCore.h / AppCore.cpp         # app shell: module registry, config r/w, settings routing
@@ -27,18 +27,21 @@ The guiding idea: **browse structured content, then hand off to the right tool f
       local_files/
         LocalFilesBackend.h/.cpp
       plex/
-        PlexBackend.h/.cpp          # good reference backend implementation
+        PlexBackend.h/.cpp          # hidden reference backend retained until Jellyfin parity
+      jellyfin/
+        JellyfinBackend.h/.cpp      # Jellyfin auth, browsing, stream URL building
       ...
     player/
       MpvController.h/.cpp          # mpv subprocess controller: QProcess launch + IPC socket
   modules/                          # QML + assets per module (discovered at startup)
-    plex/
+    jellyfin/
       manifest.json                 # module identity and settings shape
       assets/images/logo.svg
       views/
         Root.qml                    # module router (required)
         ...
     local_files/
+    plex/                           # hidden from normal module discovery
     ...
   views/                            # app-level QML
     ModuleList.qml
@@ -49,7 +52,7 @@ The guiding idea: **browse structured content, then hand off to the right tool f
   CMakeLists.txt
 ```
 
-There are three modules today: `local_files`, `plex`, and `ambient_mode`. `plex` is a helpful reference when building something new as it covers a more complex use case (connecting to a 3rd party API with auth)
+The user-facing modules today are `jellyfin`, `local_files`, and `ambient_mode`. `plex` remains installed and registerable, but its manifest is marked `hidden: true` while Jellyfin moves toward parity.
 
 ## Anatomy of a Module
 
@@ -81,11 +84,14 @@ Loaded at startup by `AppCore` — the single source of truth for a module's ide
 {
   "id": "com.240mp.<name>",
   "name": "<DISPLAY NAME>",
+  "hidden": false,
   "icon": "assets/images/logo.svg",
   "entry_point_qml": "views/Root.qml",
   "settings": [ ... ]
 }
 ```
+
+Top-level `hidden: true` keeps a module installed and registerable but omits it from normal module discovery and Settings. This fork uses that for Plex while Jellyfin is being brought to parity.
 
 ### Setting types
 
@@ -101,14 +107,14 @@ Additional fields any setting may carry:
 
 - `key` — the config key written under `modules.<id>.<key>` in `config.json`. Supports dot-notation.
 - `label` — display text in Settings.
-- `requires_auth` — if `true`, the setting is only shown when the module reports an authenticated state via `get_module_auth_state(moduleId)`. Used by Plex to hide server/user/library settings until sign-in.
+- `requires_auth` — if `true`, the setting is only shown when the module reports an authenticated state via `get_module_auth_state(moduleId)`. Used by authenticated modules to hide settings until sign-in.
 
 ### Dynamic options and apply slots
 
 - For `list_single` / `multiselect_submenu` with `"options_source": "dynamic"`, the backend slot named by `options_slot` must emit `dynamicOptionsReady(key, [{id, label}])`. `AppCore` re-emits it to QML with the module ID prepended.
 - For `list_single` with `apply_slot`, that slot is called automatically (routed through `invoke_module_action`) when the user changes the value.
 
-A real example (Plex) — note `requires_auth`, dynamic options, and apply slots:
+A real example from Plex — note `requires_auth`, dynamic options, and apply slots:
 
 ```json
 {
@@ -126,7 +132,7 @@ A real example (Plex) — note `requires_auth`, dynamic options, and apply slots
 
 `AppCore` (`src/AppCore.h/.cpp`) is the shell. It's exposed to all QML as the context property **`appCore`**.
 
-**Global context properties** (available in all QML): `appCore`, `mpvController`, plus one per module backend (`localFilesBackend`, `plexBackend`, `ambientModeBackend`, …). Backend names are assigned by the `registerModule` call in `main.cpp`.
+**Global context properties** (available in all QML): `appCore`, `mpvController`, plus one per module backend (`localFilesBackend`, `jellyfinBackend`, `plexBackend`, `ambientModeBackend`, ...). Backend names are assigned by the `registerModule` call in `main.cpp`.
 
 ### Q_INVOKABLE slots used by QML
 
@@ -169,40 +175,58 @@ The module ID lives in exactly one place per module — this call. Declare these
 
 ## Playback Hand-off (MpvController)
 
-The current MPV implementation is a good reference implementation of the "browse & hand-off" philosophy. When a module decides to play a video, it hands off to **mpv** rather than rendering video itself. All of that lives in `MpvController` (`src/player/MpvController.h/.cpp`), exposed to QML as the context property **`mpvController`**.
+The current mpv implementation is a good reference implementation of the "browse & hand-off" philosophy. When a module decides to play a video, it hands off to **mpv** rather than rendering video itself. All of that lives in `MpvController` (`src/player/MpvController.h/.cpp`), exposed to QML as the context property **`mpvController`**.
 
 ### How the hand-off works
 
-1. **Launch** — `loadAndPlay(url, startSeconds, audioTrack, subTrack, ...)` starts mpv as a `QProcess`. Playback parameters are passed as mpv command-line flags: `--start=<sec>` (resume offset), `--playlist-start=<n>`, `--loop-playlist=inf`, and so on. mpv is found on `PATH` — the app never links libmpv.
-2. **Control channel** — mpv is started with `--input-ipc-server=<socket>` (a Unix domain socket at `/tmp/240mp-mpv.sock`). `MpvController` connects to it with a `QLocalSocket` and sends JSON commands via `sendCommand(QJsonArray)`. `seekTo()` and `sendKey()` (which sends mpv a `keypress` command) go over this channel — that's how the USB remote / keyboard drives mpv's OSC while it's fullscreen.
-3. **State back to QML** — `MpvController` issues `observe_property` for `time-pos`, `duration`, and `playlist-pos`, and re-publishes them as `Q_PROPERTY`s + the `positionChanged` / `durationChanged` / `playlistPosChanged` signals. A watchdog timer logs a warning if no `time-pos` event arrives for ~10 s (freeze detection).
-4. **Exit** — when mpv quits, `MpvController` emits **`playbackFinished(finalPos, finalDur)`** on a normal exit (used to record resume position), or **`playbackFailed()`** when mpv exits with code 2 (file couldn't be played) — `Player.qml` listens for this to retry with transcoding.
+1. **Launch** — `loadAndPlay(url, startSeconds, audioTrack, subTrack, ...)` starts mpv as a `QProcess`. Playback parameters are passed as mpv command-line flags: `--start=<sec>` (resume offset), `--playlist-start=<n>`, `--loop-playlist=inf`, selected audio/subtitle tracks, sidecar subtitle files, and so on. mpv is resolved from the app bundle first, then `PATH`; the app never links libmpv.
+2. **Authenticated HTTP playback** — Jellyfin headers are written to a temporary owner-only mpv include file and passed with `--include=<file>`, so tokens are not exposed as normal command-line header arguments. Jellyfin stream URLs avoid `api_key` query tokens.
+3. **Control channel** — mpv is started with `--input-ipc-server=<socket>` (a Unix domain socket at `/tmp/240-mp-jellyfin-mpv.sock`). `MpvController` connects to it with a `QLocalSocket` and sends JSON commands via `sendCommand(QJsonArray)`. `seekTo()` and `sendKey()` (which sends mpv a `keypress` command) go over this channel — that's how the USB remote / keyboard drives mpv's OSC while it's fullscreen.
+4. **State back to QML** — `MpvController` issues `observe_property` for `time-pos`, `duration`, and `playlist-pos`, and re-publishes them as `Q_PROPERTY`s + the `positionChanged` / `durationChanged` / `playlistPosChanged` signals. A watchdog timer logs a warning if no `time-pos` event arrives for about 30 s.
+5. **Exit** — when mpv quits, `MpvController` emits **`playbackFinished(finalPos, finalDur)`** on a normal exit, or **`playbackFailed()`** on a non-zero exit. Local Files records resume position from those signals; Jellyfin currently uses them only to return from playback or show failure.
 
 ### Custom OSC (Lua)
 
-The on-screen controls mpv shows during playback are custom Lua scripts in `scripts/` (`mpv-osc.lua` for normal playback, `ambient-osc.lua` for Ambient Mode), loaded via mpv's `--script=` flag. Options are passed in with `--script-opts=` (e.g. `transcode-offset=<sec>`). The remote's key events reach these scripts through the `keypress` IPC bridge described above.
-
-### Raspberry Pi headless hand-off (EGLFS)
-
-On RPi Lite there because there is no display server; Qt draws via EGLFS straight to the KMS/DRM framebuffer, so the app and mpv can't both own the screen at once. `MpvController` performs a DRM/VT hand-off: it saves Qt's DRM CRTC state, switches to a free virtual terminal so mpv can take the framebuffer, and **restores** Qt's CRTC state when mpv exits (`saveDrmCrtcState` / `restoreDrmCrtcState`, `doHeadlessRestore`, plus the VT-switch helpers). This is Linux-only (`#ifdef Q_OS_LINUX`); on macOS the hand-off is a plain fullscreen window swap.
+The on-screen controls mpv shows during playback are custom Lua scripts in `scripts/` (`mpv-osc.lua` for normal playback, `ambient-osc.lua` for Ambient Mode), loaded via mpv's `--script=` flag. The remote's key events reach these scripts through the `keypress` IPC bridge described above.
 
 ### Adding a different hand-off target
 
-The longer-term vision is to hand off to *other* purpose-built tools (e.g. RetroArch), not just mpv. `MpvController` is the template for that: launch the external tool as a `QProcess`, drive it over whatever control channel it offers, surface progress/exit back to QML via signals, and (on RPi Lite) bracket the launch with the same DRM/VT save-and-restore so the framebuffer is handed over cleanly and returned on exit.
+`MpvController` is the template for that: launch the external tool as a `QProcess`, drive it over whatever control channel it offers, and surface progress/exit back to QML via signals.
 
 ## C++ Backend Patterns
 
 Backends are `QObject` subclasses registered via `registerModule(...)` before the engine loads.
-Please review `PlexBackend` as a reference implementation.
+Please review `JellyfinBackend` for the current third-party API integration pattern. `PlexBackend` is still useful as a larger reference, but Plex is hidden in this fork.
 
 - All HTTP via `QNetworkAccessManager` — async, on the main thread, no worker threads needed.
 - Results returned to QML via signals.
 - Auth/state persisted to JSON files in the data dir.
+- Auth files that contain tokens should be written with owner read/write permissions only.
 - `Q_INVOKABLE` for slots called from QML; `signals:` for callbacks to QML.
 - For dynamic settings dropdowns, emit `dynamicOptionsReady(key, [{id, label}])` — auto-connected; `AppCore` re-emits with the module ID prepended.
 - For auth-gated modules, emit `authStateChanged()` on sign-in/out — auto-connected and re-emitted as `moduleAuthStateChanged(moduleId)`.
 - To react to your own settings changing, add a slot `onSettingChanged(moduleId, key, value)` — auto-connected to `moduleSettingChanged`.
 - A backend resolves its own configured paths in its constructor — e.g. `LocalFilesBackend` / `AmbientModeBackend` read `media_directory` from `config.json` (defaulting to `dataRoot/media` / `dataRoot/ambient`). `main.cpp` does not touch module paths.
+
+## Jellyfin Module
+
+The Jellyfin module lives in `modules/jellyfin/` and `src/modules/jellyfin/`.
+
+- Auth supports password login and Quick Connect.
+- Auth state is persisted in `jellyfin_auth.json`; passwords are never persisted.
+- User-facing library browsing is currently limited to movie libraries.
+- Movie list loading is paged through `/Items` with `limit=250`, lightweight list fields, and `enableTotalRecordCount=false`.
+- Completed movie lists are cached for the current app session and cleared on logout or new authentication.
+- Detail loading fetches heavier fields, including `Overview` and `MediaSources`, only when a movie is opened.
+- Stream URLs use `/Videos/{itemId}/stream` with direct/static playback and mpv HTTP headers.
+
+## Track Selection
+
+Local Files and Jellyfin both expose audio/subtitle choices before playback.
+
+- Local Files calls bundled or PATH `ffprobe` through `LocalFilesBackend::probeMediaTracks()`, validates the probed path stays under the configured media root, and adds matching sidecar subtitles from the same directory.
+- Jellyfin parses `MediaStreams` from item detail responses and maps audio/subtitle choices to mpv `--aid`, `--sid`, and `--sub-file` values.
+- External subtitles are passed as authenticated mpv subtitle URLs when Jellyfin provides `DeliveryUrl`.
 
 ## QML View Patterns
 
@@ -391,9 +415,10 @@ User configuration is stored in `config.json` in the app's data directory:
 {
   "app": { "color_scheme": "Video 1" },
   "modules": {
-    "com.240mp.plex": { "enabled": true, "server_machine_id": "...", ... }
+    "com.240mp.jellyfin": { "enabled": true, "resume_playback": "ask", "video_quality": "direct" },
+    "com.240mp.local_files": { "enabled": true, "media_directory": "" }
   }
 }
 ```
 
-Each module's settings live under `modules.<id>`. Use `save_setting` / `get_setting` (which support dot-notation keys) rather than writing the file directly. The data directory is created on first run and is separate from the app itself, so rebuilding never wipes user settings. For the exact per-OS path (macOS vs Raspberry Pi OS), see [BUILDING.md](BUILDING.md#configuration).
+Each module's settings live under `modules.<id>`. Use `save_setting` / `get_setting` (which support dot-notation keys) rather than writing the file directly. The data directory is created on first run and is separate from the app itself, so rebuilding never wipes user settings. For the exact macOS path, see [BUILDING.md](BUILDING.md#configuration).

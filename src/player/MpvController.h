@@ -43,7 +43,8 @@ public:
                                   const QString &plexToken = {},
                                   bool muteAudio = false,
                                   const QString &oscMode = {},
-                                  bool shuffle = false);
+                                  bool shuffle = false,
+                                  const QStringList &httpHeaderFields = {});
     Q_INVOKABLE void stop();
     Q_INVOKABLE void seekTo(int positionMs);
     Q_INVOKABLE void sendKey(const QString &key);
@@ -54,7 +55,7 @@ signals:
     void playlistPosChanged(int pos);
     // Emitted when mpv exits normally (user quit or end of file).
     void playbackFinished(int finalPositionMs, int finalDurationMs);
-    // Emitted when mpv exits with an error (code 2 — file could not be played).
+    // Emitted when mpv exits with an error.
     // Player.qml uses this to retry with transcoding.
     void playbackFailed();
 
@@ -71,6 +72,8 @@ private:
     int  findFreeVt() const;
     int  findQtDrmFd() const;
     void switchToVt(int vt);
+    QString writeHttpHeaderConfig(const QStringList &httpHeaderFields);
+    void removeHttpHeaderConfig();
 #ifdef Q_OS_LINUX
     void saveDrmCrtcState(int fd);
     void restoreDrmCrtcState(int fd);
@@ -85,6 +88,7 @@ private:
     QString       m_socketPath;
     QString       m_inputConfPath;
     QString       m_logFilePath;
+    QString       m_httpHeaderConfPath;
     int           m_position     = 0;
     int           m_duration     = 0;
     int           m_playlistPos  = -1;

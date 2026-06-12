@@ -12,6 +12,7 @@
 #include "AppCore.h"
 #include "modules/local_files/LocalFilesBackend.h"
 #include "modules/plex/PlexBackend.h"
+#include "modules/jellyfin/JellyfinBackend.h"
 #include "modules/ambient_mode/AmbientModeBackend.h"
 #include "player/MpvController.h"
 #ifdef Q_OS_MAC
@@ -28,7 +29,7 @@ static QString resolveAppRoot() {
     if (QCoreApplication::applicationFilePath().contains(".app/Contents/MacOS/"))
         return QDir(appDir + "/../Resources").canonicalPath();
 
-    QDir fhsData(appDir + "/../share/240mp");
+    QDir fhsData(appDir + "/../share/240-mp-jellyfin");
     if (fhsData.exists())
         return fhsData.canonicalPath();
 
@@ -47,10 +48,10 @@ static QString resolveDataRoot() {
 
 int main(int argc, char *argv[]) {
     QGuiApplication app(argc, argv);
-    app.setApplicationName("240-MP");
+    app.setApplicationName("240-mp-jellyfin");
     app.setApplicationVersion("2026.06.10");
 
-    // Hide cursor — 240-MP is keyboard-only so the cursor serves no purpose.
+    // Hide cursor — this app is keyboard-only so the cursor serves no purpose.
     // On Linux, only hide on headless EGLFS (not desktop X11/Wayland sessions).
 #ifdef Q_OS_LINUX
     if (qgetenv("DISPLAY").isEmpty() && qgetenv("WAYLAND_DISPLAY").isEmpty())
@@ -76,6 +77,7 @@ int main(int argc, char *argv[]) {
     AppCore             appCore(appRoot, dataRoot);
     LocalFilesBackend   localFiles(appRoot, dataRoot);
     PlexBackend         plexBackend(appRoot, dataRoot);
+    JellyfinBackend     jellyfinBackend(appRoot, dataRoot);
     AmbientModeBackend  ambientMode(dataRoot);
     MpvController       mpvController(appRoot);
 
@@ -85,6 +87,7 @@ int main(int argc, char *argv[]) {
     QQmlContext *ctx = engine.rootContext();
     appCore.registerModule("com.240mp.local_files",  "localFilesBackend",  &localFiles,  ctx);
     appCore.registerModule("com.240mp.plex",         "plexBackend",        &plexBackend, ctx);
+    appCore.registerModule("com.240mp.jellyfin",     "jellyfinBackend",    &jellyfinBackend, ctx);
     appCore.registerModule("com.240mp.ambient_mode", "ambientModeBackend", &ambientMode, ctx);
 
     ctx->setContextProperty("appCore",       &appCore);

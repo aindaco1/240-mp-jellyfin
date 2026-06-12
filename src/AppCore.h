@@ -15,6 +15,7 @@ struct ModuleEntry {
     QString entryQml;    // relative to module folder, e.g. "views/Root.qml"
     QString iconRel;     // relative to module folder, e.g. "assets/images/logo.svg"
     QVariantList settings;
+    bool hidden = false;
 };
 
 class AppCore : public QObject {
