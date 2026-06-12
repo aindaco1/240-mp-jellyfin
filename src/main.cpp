@@ -49,7 +49,7 @@ static QString resolveDataRoot() {
 int main(int argc, char *argv[]) {
     QGuiApplication app(argc, argv);
     app.setApplicationName("240-mp-jellyfin");
-    app.setApplicationVersion("2026.06.10");
+    app.setApplicationVersion("1.0");
 
     // Hide cursor — this app is keyboard-only so the cursor serves no purpose.
     // On Linux, only hide on headless EGLFS (not desktop X11/Wayland sessions).

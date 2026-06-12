@@ -32,6 +32,8 @@ For packaging, CI, and config paths, see **[BUILDING.md](BUILDING.md)** and **[I
 | macOS build, run, package, release workflow, config paths | **[BUILDING.md](BUILDING.md)** |
 | End-user macOS install/update/uninstall | **[INSTALL.md](INSTALL.md)** |
 | Token handling and security-sensitive areas | **[SECURITY.md](SECURITY.md)** |
+| User-facing change history | **[CHANGELOG.md](CHANGELOG.md)** |
+| Planned work and improvement ideas | **[ROADMAP.md](ROADMAP.md)** |
 
 ---
 

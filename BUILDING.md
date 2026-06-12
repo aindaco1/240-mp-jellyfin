@@ -105,15 +105,15 @@ Set them inline, e.g. `QML_IMPORT_TRACE=1 APP_ROOT=$(pwd) ./build/240-mp-jellyfi
 Releases are built automatically when you push a version tag:
 
 ```bash
-git tag v2026.06.04
-git push origin v2026.06.04
+git tag v1.0
+git push origin v1.0
 ```
 
 And you can use pre-release tags to test CI without making a public release:
 
 ```bash
-git tag v1.0.0-rc1
-git push origin v1.0.0-rc1
+git tag v1.1-rc1
+git push origin v1.1-rc1
 ```
 
 Tags containing `-rc`, `-beta`, or `-alpha` are published as GitHub pre-releases.

@@ -63,6 +63,13 @@ APP_ROOT=$(pwd) ./build/240-mp-jellyfin.app/Contents/MacOS/240-mp-jellyfin
 
 See [INSTALL.md](INSTALL.md). The release artifact is a macOS Apple Silicon DMG containing `240-mp-jellyfin.app`.
 
+## Project Docs
+
+- [CHANGELOG.md](CHANGELOG.md) records user-facing changes.
+- [ROADMAP.md](ROADMAP.md) tracks planned work and improvement ideas.
+- [ARCHITECTURE.md](ARCHITECTURE.md) explains the module, playback, and backend structure.
+- [CONTRIBUTING.md](CONTRIBUTING.md) covers contribution and testing expectations.
+
 ## Configuration
 
 User configuration is stored outside the app bundle:
