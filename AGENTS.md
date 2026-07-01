@@ -1,6 +1,6 @@
 # 240-mp-jellyfin Development Guidelines
 
-240-mp-jellyfin is a macOS Apple Silicon fork of 240-MP. It keeps the retro VHS/CRT-style Qt 6 + QML shell, keeps Local Files and Ambient Mode, hides Plex, and adds Jellyfin as the primary server-backed module.
+240-mp-jellyfin is a macOS Apple Silicon fork of 240-MP. It keeps the retro VHS/CRT-style Qt 6 + QML shell, keeps Local, Loop, and Retro, hides Plex, and adds Jellyfin as the primary server-backed module.
 
 **Playback engine**: the app launches `mpv` as a subprocess through `MpvController`. Local track probing uses `ffprobe`. Development builds can use Homebrew `mpv` and `ffprobe`; packaged macOS apps bundle both helpers and their non-system dynamic libraries.
 
@@ -40,7 +40,7 @@ For packaging, CI, and config paths, see **[BUILDING.md](BUILDING.md)** and **[I
 ## Key Facts
 
 - CMake intentionally fails on non-macOS hosts.
-- User-facing modules are `jellyfin`, `local_files`, and `ambient_mode`.
+- User-facing modules are `jellyfin`, `retro_tv`, `local_files`, and `ambient_mode`, displayed as Jellyfin, Retro, Local, and Loop.
 - Plex remains in the source tree but is hidden by `modules/plex/manifest.json`.
 - Modules are discovered from `modules/*/manifest.json`; a backend module adds one `registerModule(...)` call in `src/main.cpp`.
 - `registerModule` wires optional backend signals/slots by introspection: `dynamicOptionsReady`, `authStateChanged`, and `onSettingChanged`.

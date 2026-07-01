@@ -8,6 +8,7 @@ local idle_timer = nil
 
 local SEEK_SECONDS = 10
 local MENU_TIMEOUT = 5
+local RETRO_TV_MODE = mp.get_opt("retro-tv") == "1"
 
 -- Colors (ABGR format for ASS)
 local C_WHITE = "&HFFFFFF&"
@@ -310,10 +311,14 @@ local function toggle_menu()
     end
 end
 
--- Forced bindings so UP/DOWN take priority over mpv's default seek bindings
--- on desktop (macOS/Linux with native keyboard input).
-mp.add_forced_key_binding("UP",   "open_menu_up",   toggle_menu)
-mp.add_forced_key_binding("DOWN", "open_menu_down", toggle_menu)
+if RETRO_TV_MODE then
+    mp.add_forced_key_binding("m", "open_menu_m", toggle_menu)
+else
+    -- Forced bindings so UP/DOWN take priority over mpv's default seek bindings
+    -- on desktop (macOS/Linux with native keyboard input).
+    mp.add_forced_key_binding("UP",   "open_menu_up",   toggle_menu)
+    mp.add_forced_key_binding("DOWN", "open_menu_down", toggle_menu)
+end
 
 -- ESC / BS quit when the menu is not visible. When the menu opens it adds
 -- forced bindings for these keys that take priority automatically; when it

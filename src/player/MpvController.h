@@ -44,15 +44,20 @@ public:
                                   bool muteAudio = false,
                                   const QString &oscMode = {},
                                   bool shuffle = false,
-                                  const QStringList &httpHeaderFields = {});
+                                  const QStringList &httpHeaderFields = {},
+                                  const QString &videoFilters = {},
+                                  const QStringList &inputBindings = {});
     Q_INVOKABLE void stop();
     Q_INVOKABLE void seekTo(int positionMs);
     Q_INVOKABLE void sendKey(const QString &key);
+    Q_INVOKABLE void setVideoFilters(const QString &filters);
+    Q_INVOKABLE void showText(const QString &text, int durationMs = 4000);
 
 signals:
     void positionChanged(int ms);
     void durationChanged(int ms);
     void playlistPosChanged(int pos);
+    void mpvKeyPressed(const QString &key);
     // Emitted when mpv exits normally (user quit or end of file).
     void playbackFinished(int finalPositionMs, int finalDurationMs);
     // Emitted when mpv exits with an error.
@@ -74,6 +79,7 @@ private:
     void switchToVt(int vt);
     QString writeHttpHeaderConfig(const QStringList &httpHeaderFields);
     void removeHttpHeaderConfig();
+    void writeInputConfig(const QStringList &inputBindings = {});
 #ifdef Q_OS_LINUX
     void saveDrmCrtcState(int fd);
     void restoreDrmCrtcState(int fd);

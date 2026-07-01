@@ -10,6 +10,7 @@
 #include <QDateTime>
 #include <QDebug>
 #include <QRegularExpression>
+#include <QSet>
 #include <QTemporaryFile>
 #include <QUrl>
 #include <QUrlQuery>
@@ -116,13 +117,7 @@ MpvController::MpvController(const QString &appRoot, QObject *parent)
     , m_inputConfPath(QDir::tempPath() + "/240-mp-jellyfin-input.conf")
     , m_logFilePath(QDir::tempPath() + "/240-mp-jellyfin-mpv.log")
 {
-    QFile f(m_inputConfPath);
-    if (f.open(QFile::WriteOnly | QFile::Text)) {
-        f.write("ESC quit\n");
-        f.write("BS quit\n");
-        f.write("ENTER cycle pause\n");
-        f.close();
-    }
+    writeInputConfig();
 
     m_ipc = new QLocalSocket(this);
     connect(m_ipc, &QLocalSocket::connected, this, [this] {
@@ -197,13 +192,50 @@ void MpvController::removeHttpHeaderConfig() {
     }
 }
 
+void MpvController::writeInputConfig(const QStringList &inputBindings) {
+    QSet<QString> overrideKeys;
+    for (const QString &binding : inputBindings) {
+        const QString trimmed = binding.trimmed();
+        const int split = trimmed.indexOf(' ');
+        if (split > 0)
+            overrideKeys.insert(trimmed.left(split));
+    }
+
+    QFile f(m_inputConfPath);
+    if (!f.open(QFile::WriteOnly | QFile::Text))
+        return;
+
+    const QStringList defaults = {
+        QStringLiteral("ESC quit"),
+        QStringLiteral("BS quit"),
+        QStringLiteral("ENTER cycle pause")
+    };
+    for (const QString &binding : defaults) {
+        const QString key = binding.section(' ', 0, 0);
+        if (!overrideKeys.contains(key)) {
+            f.write(binding.toUtf8());
+            f.write("\n");
+        }
+    }
+
+    for (const QString &binding : inputBindings) {
+        const QString trimmed = binding.trimmed();
+        if (!trimmed.isEmpty() && !trimmed.contains('\n') && !trimmed.contains('\r')) {
+            f.write(trimmed.toUtf8());
+            f.write("\n");
+        }
+    }
+}
+
 void MpvController::loadAndPlay(const QString &url, float startSeconds,
                                  int audioTrack, int subTrack,
                                  const QStringList &subFiles, bool loop,
                                  int playlistStart, float transcodeOffsetSec,
                                  const QString &plexToken, bool muteAudio,
                                  const QString &oscMode, bool shuffle,
-                                 const QStringList &httpHeaderFields) {
+                                 const QStringList &httpHeaderFields,
+                                 const QString &videoFilters,
+                                 const QStringList &inputBindings) {
     if (m_process) {
         m_process->disconnect();
         if (m_process->state() != QProcess::NotRunning) {
@@ -220,12 +252,19 @@ void MpvController::loadAndPlay(const QString &url, float startSeconds,
     m_position    = 0;
     m_duration    = 0;
     m_playlistPos = -1;
+    writeInputConfig(inputBindings);
 
 #ifdef Q_OS_MACOS
     // .app bundles launched via double-click get a minimal PATH that excludes
-    // Homebrew. Prepend known install locations so findExecutable works.
+    // Homebrew. Prefer the current yt-dlp keg ahead of stale shims so mpv's
+    // YouTube hook can extract playable streams.
     {
-        const QStringList extraPaths = { "/opt/homebrew/bin", "/usr/local/bin" };
+        const QStringList extraPaths = {
+            "/usr/local/bin",
+            "/opt/homebrew/bin",
+            "/usr/local/opt/yt-dlp/bin",
+            "/opt/homebrew/opt/yt-dlp/bin"
+        };
         const QStringList currentPath = qEnvironmentVariable("PATH").split(":");
         for (const QString &p : extraPaths) {
             if (!currentPath.contains(p))
@@ -289,6 +328,8 @@ void MpvController::loadAndPlay(const QString &url, float startSeconds,
 
     if (transcodeOffsetSec > 0.5f)
         args << QString("--script-opts=transcode-offset=%1").arg(double(transcodeOffsetSec), 0, 'f', 3);
+    if (oscMode == QStringLiteral("retro"))
+        args << QStringLiteral("--script-opts=retro-tv=1");
 
     if (loop)
         args << QStringLiteral("--loop-playlist=inf");
@@ -296,6 +337,8 @@ void MpvController::loadAndPlay(const QString &url, float startSeconds,
         args << QStringLiteral("--shuffle");
     if (muteAudio)
         args << QStringLiteral("--no-audio");
+    if (!videoFilters.trimmed().isEmpty())
+        args << QStringLiteral("--vf=%1").arg(videoFilters.trimmed());
 
     QStringList playbackHeaders = httpHeaderFields;
     if (!plexToken.isEmpty()) {
@@ -427,6 +470,14 @@ void MpvController::sendKey(const QString &key) {
     sendCommand({"keypress", key});
 }
 
+void MpvController::setVideoFilters(const QString &filters) {
+    sendCommand({"vf", "set", filters.trimmed()});
+}
+
+void MpvController::showText(const QString &text, int durationMs) {
+    sendCommand({"show-text", text, durationMs});
+}
+
 void MpvController::tryConnectIpc() {
     if (m_ipc->state() == QLocalSocket::ConnectedState ||
         m_ipc->state() == QLocalSocket::ConnectingState)
@@ -438,10 +489,21 @@ void MpvController::onIpcReadyRead() {
     while (m_ipc->canReadLine()) {
         const QByteArray line = m_ipc->readLine().trimmed();
         const QJsonObject obj = QJsonDocument::fromJson(line).object();
-        if (obj.isEmpty() || obj["event"].toString() != "property-change")
+        if (obj.isEmpty())
             continue;
 
         m_lastIpcEventMs = QDateTime::currentMSecsSinceEpoch();
+
+        const QString event = obj["event"].toString();
+        if (event == QStringLiteral("client-message")) {
+            const QJsonArray args = obj["args"].toArray();
+            if (args.size() >= 2 && args.at(0).toString() == QStringLiteral("240mp-key"))
+                emit mpvKeyPressed(args.at(1).toString());
+            continue;
+        }
+
+        if (event != QStringLiteral("property-change"))
+            continue;
 
         const QString     name = obj["name"].toString();
         const QJsonValue  data = obj["data"];

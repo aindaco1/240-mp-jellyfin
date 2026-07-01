@@ -1,6 +1,7 @@
 {
   "id": "com.240mp.jellyfin",
   "name": "Jellyfin",
+  "display_order": 10,
   "icon": "assets/images/logo.svg",
   "entry_point_qml": "views/Root.qml",
   "settings": [

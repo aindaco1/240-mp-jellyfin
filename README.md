@@ -1,6 +1,6 @@
 # 240-mp-jellyfin
 
-240-mp-jellyfin is a macOS Apple Silicon fork of 240-MP: a retro VCR-style media shell built with C++ Qt 6 and QML. The fork keeps the CRT/240p-inspired interface, Local Files playback, and Ambient Mode, then adds Jellyfin as the main server-backed media module.
+240-mp-jellyfin is a macOS Apple Silicon fork of 240-MP: a retro VCR-style media shell built with C++ Qt 6 and QML. The fork keeps the CRT/240p-inspired interface, Local playback, Loop, and Retro decade feeds, then adds Jellyfin as the main server-backed media module.
 
 The app is a browsing shell, not an embedded video renderer. It launches `mpv` as a subprocess for playback and uses `ffprobe` to inspect local audio/subtitle tracks. Development builds use Homebrew tools from `PATH`; packaged macOS apps bundle `mpv`, `ffprobe`, and their non-system dynamic libraries so end users do not need Homebrew runtime dependencies.
 
@@ -26,7 +26,15 @@ The app is a browsing shell, not an embedded video renderer. It launches `mpv` a
 
 Not yet implemented: TV/music libraries, Continue Watching hubs, playback progress reporting back to Jellyfin, watched-state updates, and transcoding fallback.
 
-### Local Files
+### Retro
+
+- MyRetroTVs-backed feeds for the 50s, 60s, 70s, 80s, 90s, and 00s.
+- Fullscreen mpv playback of decoded YouTube clips, with no TV-frame overlay.
+- Keyboard channel surfing, clip skipping, feed filtering, and decade jumping.
+- CRT-style noise, glow, black-and-white, and static transition effects.
+- Home-screen order places Retro between Jellyfin and Local.
+
+### Local
 
 - Folder browsing.
 - Common video file support: `mp4`, `mkv`, `avi`, `mov`, `m4v`, `webm`, `wmv`, `flv`, `f4v`, `mpg`, `mpeg`, `vob`.
@@ -36,7 +44,7 @@ Not yet implemented: TV/music libraries, Continue Watching hubs, playback progre
 - Audio and subtitle selection before playback.
 - Sidecar subtitle discovery for common subtitle formats.
 
-### Ambient Mode
+### Loop
 
 - Looping background video playback.
 - Optional separate audio playlist.

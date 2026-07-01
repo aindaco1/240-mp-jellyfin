@@ -8,6 +8,7 @@
 #include <QDebug>
 #include <QRegularExpression>
 #include <QQmlContext>
+#include <algorithm>
 
 AppCore::AppCore(const QString &appRoot, const QString &dataRoot, QObject *parent)
     : QObject(parent), m_appRoot(appRoot), m_dataRoot(dataRoot)
@@ -40,10 +41,17 @@ AppCore::AppCore(const QString &appRoot, const QString &dataRoot, QObject *paren
         m.entryQml = entryQml;
         m.iconRel  = manifest["icon"].toString();
         m.settings = manifest["settings"].toArray().toVariantList();
+        m.displayOrder = manifest["display_order"].toInt(1000);
         m.hidden   = manifest["hidden"].toBool(false);
         m_modules.append(m);
         qDebug("[AppCore] Loaded manifest: %s", qPrintable(id));
     }
+
+    std::sort(m_modules.begin(), m_modules.end(), [](const ModuleEntry &a, const ModuleEntry &b) {
+        if (a.displayOrder != b.displayOrder)
+            return a.displayOrder < b.displayOrder;
+        return a.name.localeAwareCompare(b.name) < 0;
+    });
 }
 
 // ---------------------------------------------------------------------------

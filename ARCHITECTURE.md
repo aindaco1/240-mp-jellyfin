@@ -41,6 +41,7 @@ The guiding idea: **browse structured content, then hand off to the right tool f
         Root.qml                    # module router (required)
         ...
     local_files/
+    retro_tv/
     plex/                           # hidden from normal module discovery
     ...
   views/                            # app-level QML
@@ -52,7 +53,7 @@ The guiding idea: **browse structured content, then hand off to the right tool f
   CMakeLists.txt
 ```
 
-The user-facing modules today are `jellyfin`, `local_files`, and `ambient_mode`. `plex` remains installed and registerable, but its manifest is marked `hidden: true` while Jellyfin moves toward parity.
+The user-facing modules today are `jellyfin`, `retro_tv` (displayed as Retro), `local_files` (displayed as Local), and `ambient_mode` (displayed as Loop). They appear in that order on the module list. `plex` remains installed and registerable, but its manifest is marked `hidden: true` while Jellyfin moves toward parity.
 
 ## Anatomy of a Module
 
@@ -84,6 +85,7 @@ Loaded at startup by `AppCore` — the single source of truth for a module's ide
 {
   "id": "com.240mp.<name>",
   "name": "<DISPLAY NAME>",
+  "display_order": 100,
   "hidden": false,
   "icon": "assets/images/logo.svg",
   "entry_point_qml": "views/Root.qml",
@@ -91,7 +93,7 @@ Loaded at startup by `AppCore` — the single source of truth for a module's ide
 }
 ```
 
-Top-level `hidden: true` keeps a module installed and registerable but omits it from normal module discovery and Settings. This fork uses that for Plex while Jellyfin is being brought to parity.
+Top-level `hidden: true` keeps a module installed and registerable but omits it from normal module discovery and Settings. This fork uses that for Plex while Jellyfin is being brought to parity. `display_order` controls the home-screen and Settings module order; lower numbers appear first.
 
 ### Setting types
 
@@ -179,15 +181,15 @@ The current mpv implementation is a good reference implementation of the "browse
 
 ### How the hand-off works
 
-1. **Launch** — `loadAndPlay(url, startSeconds, audioTrack, subTrack, ...)` starts mpv as a `QProcess`. Playback parameters are passed as mpv command-line flags: `--start=<sec>` (resume offset), `--playlist-start=<n>`, `--loop-playlist=inf`, selected audio/subtitle tracks, sidecar subtitle files, and so on. mpv is resolved from the app bundle first, then `PATH`; the app never links libmpv.
+1. **Launch** — `loadAndPlay(url, startSeconds, audioTrack, subTrack, ...)` starts mpv as a `QProcess`. Playback parameters are passed as mpv command-line flags: `--start=<sec>` (resume offset), `--playlist-start=<n>`, `--loop-playlist=inf`, selected audio/subtitle tracks, sidecar subtitle files, optional video filters, optional input bindings, and so on. mpv is resolved from the app bundle first, then `PATH`; the app never links libmpv.
 2. **Authenticated HTTP playback** — Jellyfin headers are written to a temporary owner-only mpv include file and passed with `--include=<file>`, so tokens are not exposed as normal command-line header arguments. Jellyfin stream URLs avoid `api_key` query tokens.
-3. **Control channel** — mpv is started with `--input-ipc-server=<socket>` (a Unix domain socket at `/tmp/240-mp-jellyfin-mpv.sock`). `MpvController` connects to it with a `QLocalSocket` and sends JSON commands via `sendCommand(QJsonArray)`. `seekTo()` and `sendKey()` (which sends mpv a `keypress` command) go over this channel — that's how the USB remote / keyboard drives mpv's OSC while it's fullscreen.
+3. **Control channel** — mpv is started with `--input-ipc-server=<socket>` (a Unix domain socket at `/tmp/240-mp-jellyfin-mpv.sock`). `MpvController` connects to it with a `QLocalSocket` and sends JSON commands via `sendCommand(QJsonArray)`. `seekTo()`, `sendKey()`, `setVideoFilters()`, and `showText()` go over this channel. mpv client messages using the `240mp-key` prefix are bridged back to QML through `mpvKeyPressed`.
 4. **State back to QML** — `MpvController` issues `observe_property` for `time-pos`, `duration`, and `playlist-pos`, and re-publishes them as `Q_PROPERTY`s + the `positionChanged` / `durationChanged` / `playlistPosChanged` signals. A watchdog timer logs a warning if no `time-pos` event arrives for about 30 s.
 5. **Exit** — when mpv quits, `MpvController` emits **`playbackFinished(finalPos, finalDur)`** on a normal exit, or **`playbackFailed()`** on a non-zero exit. Local Files records resume position from those signals; Jellyfin currently uses them only to return from playback or show failure.
 
 ### Custom OSC (Lua)
 
-The on-screen controls mpv shows during playback are custom Lua scripts in `scripts/` (`mpv-osc.lua` for normal playback, `ambient-osc.lua` for Ambient Mode), loaded via mpv's `--script=` flag. The remote's key events reach these scripts through the `keypress` IPC bridge described above.
+The on-screen controls mpv shows during playback are custom Lua scripts in `scripts/` (`mpv-osc.lua` for normal playback, `ambient-osc.lua` for Ambient Mode), loaded via mpv's `--script=` flag. Retro uses `mpv-osc.lua` in `retro-tv` mode so `M` opens the mpv controls while arrow keys remain available for channel surfing and clip skipping.
 
 ### Adding a different hand-off target
 
@@ -219,6 +221,16 @@ The Jellyfin module lives in `modules/jellyfin/` and `src/modules/jellyfin/`.
 - Completed movie lists are cached for the current app session and cleared on logout or new authentication.
 - Detail loading fetches heavier fields, including `Overview` and `MediaSources`, only when a movie is opened.
 - Stream URLs use `/Videos/{itemId}/stream` with direct/static playback and mpv HTTP headers.
+
+## Retro Module
+
+The Retro module lives entirely in `modules/retro_tv/`; it has no C++ backend.
+
+- Feed discovery loads decade-specific MyRetroTVs sites for the 50s, 60s, 70s, 80s, 90s, and 00s.
+- `RetroTvData.js` fetches the feed homepage, resolves the hashed JavaScript bundle, extracts the site's YouTube ID decode map, then parses `d.json` into filterable channel groups.
+- `Player.qml` hands decoded YouTube watch URLs to mpv through `MpvController`, using custom input bindings for channel surfing, clip skipping, filtering, special effects, and exit behavior.
+- CRT effects are mpv video filters where possible; the static transition is a QML fullscreen noise overlay shown during channel and clip handoff.
+- Because feeds are remote and YouTube-backed, local development playback depends on a working `mpv` plus `yt-dlp` on `PATH` or in the packaged helper bundle.
 
 ## Track Selection
 

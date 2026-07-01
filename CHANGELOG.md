@@ -2,6 +2,14 @@
 
 All notable changes to 240-mp-jellyfin are documented here.
 
+## [Unreleased]
+
+### Added
+
+- Added the Retro module with MyRetroTVs-backed feeds for the 50s, 60s, 70s, 80s, 90s, and 00s.
+- Added Retro channel surfing, content filtering, clip skipping, YouTube handoff through mpv, CRT-style effects, and static transitions.
+- Ordered user-facing modules as Jellyfin, Retro, Local, then Loop.
+
 ## [1.0] - 2026-06-12
 
 ### Added

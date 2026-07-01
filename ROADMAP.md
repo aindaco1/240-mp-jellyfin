@@ -1,6 +1,6 @@
 # Roadmap
 
-1.0 establishes the macOS-only Jellyfin fork: movie-library browsing, direct-play playback, Local Files support, Ambient Mode, bundled playback helpers, and a hidden Plex reference module.
+1.0 establishes the macOS-only Jellyfin fork: movie-library browsing, direct-play playback, Local Files support, Ambient Mode, bundled playback helpers, Retro decade feeds, and a hidden Plex reference module.
 
 The next goal is to make 240-mp-jellyfin reliable as a daily-use macOS media app before expanding the media surface.
 
@@ -61,6 +61,12 @@ The next goal is to make 240-mp-jellyfin reliable as a daily-use macOS media app
 - Add manual subtitle file selection for non-matching sidecars.
 - Add folder-level sort modes.
 - Add a local media rescan/refresh action.
+
+### Retro Improvements
+
+- Add clearer handling for feeds or YouTube clips that fail because of upstream availability.
+- Consider persisting the last selected Retro feed, filters, and effect settings.
+- Keep the MyRetroTVs parser isolated so upstream site changes are easier to repair.
 
 ## Larger Ideas
 

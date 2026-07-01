@@ -1,0 +1,15 @@
+{
+  "id": "com.240mp.retro_tv",
+  "name": "Retro",
+  "display_order": 20,
+  "icon": "assets/images/logo.svg",
+  "entry_point_qml": "views/Root.qml",
+  "settings": [
+    {
+      "key": "enabled",
+      "label": "ENABLED",
+      "type": "toggle",
+      "default": "ON"
+    }
+  ]
+}
