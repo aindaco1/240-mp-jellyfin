@@ -185,11 +185,11 @@ The current mpv implementation is a good reference implementation of the "browse
 2. **Authenticated HTTP playback** — Jellyfin headers are written to a temporary owner-only mpv include file and passed with `--include=<file>`, so tokens are not exposed as normal command-line header arguments. Jellyfin stream URLs avoid `api_key` query tokens.
 3. **Control channel** — mpv is started with `--input-ipc-server=<socket>` (a Unix domain socket at `/tmp/240-mp-jellyfin-mpv.sock`). `MpvController` connects to it with a `QLocalSocket` and sends JSON commands via `sendCommand(QJsonArray)`. `seekTo()`, `sendKey()`, `setVideoFilters()`, and `showText()` go over this channel. mpv client messages using the `240mp-key` prefix are bridged back to QML through `mpvKeyPressed`.
 4. **State back to QML** — `MpvController` issues `observe_property` for `time-pos`, `duration`, and `playlist-pos`, and re-publishes them as `Q_PROPERTY`s + the `positionChanged` / `durationChanged` / `playlistPosChanged` signals. A watchdog timer logs a warning if no `time-pos` event arrives for about 30 s.
-5. **Exit** — when mpv quits, `MpvController` emits **`playbackFinished(finalPos, finalDur)`** on a normal exit, or **`playbackFailed()`** on a non-zero exit. Local Files records resume position from those signals; Jellyfin currently uses them only to return from playback or show failure.
+5. **Exit** — when mpv quits, `MpvController` emits **`playbackFinished(finalPos, finalDur)`** on a normal exit, or **`playbackFailed()`** on a non-zero exit. Local records resume position from those signals; Jellyfin currently uses them only to return from playback or show failure.
 
 ### Custom OSC (Lua)
 
-The on-screen controls mpv shows during playback are custom Lua scripts in `scripts/` (`mpv-osc.lua` for normal playback, `ambient-osc.lua` for Ambient Mode), loaded via mpv's `--script=` flag. Retro uses `mpv-osc.lua` in `retro-tv` mode so `M` opens the mpv controls while arrow keys remain available for channel surfing and clip skipping.
+The on-screen controls mpv shows during playback are custom Lua scripts in `scripts/` (`mpv-osc.lua` for normal playback, `ambient-osc.lua` for Loop), loaded via mpv's `--script=` flag. Retro uses `mpv-osc.lua` in `retro-tv` mode so `M` opens the mpv controls while arrow keys remain available for channel surfing and clip skipping.
 
 ### Adding a different hand-off target
 
@@ -208,7 +208,7 @@ Please review `JellyfinBackend` for the current third-party API integration patt
 - For dynamic settings dropdowns, emit `dynamicOptionsReady(key, [{id, label}])` — auto-connected; `AppCore` re-emits with the module ID prepended.
 - For auth-gated modules, emit `authStateChanged()` on sign-in/out — auto-connected and re-emitted as `moduleAuthStateChanged(moduleId)`.
 - To react to your own settings changing, add a slot `onSettingChanged(moduleId, key, value)` — auto-connected to `moduleSettingChanged`.
-- A backend resolves its own configured paths in its constructor — e.g. `LocalFilesBackend` / `AmbientModeBackend` read `media_directory` from `config.json` (defaulting to `dataRoot/media` / `dataRoot/ambient`). `main.cpp` does not touch module paths.
+- A backend resolves its own configured paths in its constructor — e.g. `LocalFilesBackend` / `AmbientModeBackend` read `media_directory` from `config.json` (defaulting to `~/Desktop`). `main.cpp` does not touch module paths.
 
 ## Jellyfin Module
 
@@ -216,10 +216,11 @@ The Jellyfin module lives in `modules/jellyfin/` and `src/modules/jellyfin/`.
 
 - Auth supports password login and Quick Connect.
 - Auth state is persisted in `jellyfin_auth.json`; passwords are never persisted.
-- User-facing library browsing is currently limited to movie libraries.
-- Movie list loading is paged through `/Items` with `limit=250`, lightweight list fields, and `enableTotalRecordCount=false`.
-- Completed movie lists are cached for the current app session and cleared on logout or new authentication.
-- Detail loading fetches heavier fields, including `Overview` and `MediaSources`, only when a movie is opened.
+- User-facing library browsing supports movie libraries and TV show libraries.
+- Movie and TV list loading is paged through `/Items` with `limit=250`, typed `includeItemTypes` requests, lightweight list fields, and `enableTotalRecordCount=false`.
+- TV libraries browse `Series` -> `Season` -> `Episode`; episodes reuse the same metadata detail, track selection, and playback flow as movies.
+- Completed lists are cached per parent/type for the current app session and cleared on logout or new authentication.
+- Detail loading fetches heavier fields, including `Overview` and `MediaSources`, only when a playable movie or episode is opened.
 - Stream URLs use `/Videos/{itemId}/stream` with direct/static playback and mpv HTTP headers.
 
 ## Retro Module
@@ -234,9 +235,9 @@ The Retro module lives entirely in `modules/retro_tv/`; it has no C++ backend.
 
 ## Track Selection
 
-Local Files and Jellyfin both expose audio/subtitle choices before playback.
+Local and Jellyfin both expose audio/subtitle choices before playback.
 
-- Local Files calls bundled or PATH `ffprobe` through `LocalFilesBackend::probeMediaTracks()`, validates the probed path stays under the configured media root, and adds matching sidecar subtitles from the same directory.
+- Local calls bundled or PATH `ffprobe` through `LocalFilesBackend::probeMediaTracks()`, validates the probed path stays under the configured media root, and adds matching sidecar subtitles from the same directory.
 - Jellyfin parses `MediaStreams` from item detail responses and maps audio/subtitle choices to mpv `--aid`, `--sid`, and `--sub-file` values.
 - External subtitles are passed as authenticated mpv subtitle URLs when Jellyfin provides `DeliveryUrl`.
 
@@ -428,7 +429,8 @@ User configuration is stored in `config.json` in the app's data directory:
   "app": { "color_scheme": "Video 1" },
   "modules": {
     "com.240mp.jellyfin": { "enabled": true, "resume_playback": "ask", "video_quality": "direct" },
-    "com.240mp.local_files": { "enabled": true, "media_directory": "" }
+    "com.240mp.local_files": { "enabled": true, "media_directory": "~/Desktop" },
+    "com.240mp.ambient_mode": { "enabled": false, "media_directory": "~/Desktop" }
   }
 }
 ```

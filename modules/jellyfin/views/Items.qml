@@ -1,5 +1,6 @@
 import QtQuick
 import Components
+import "JellyfinMedia.js" as JellyfinMedia
 
 FocusScope {
     id: itemListRoot
@@ -10,8 +11,16 @@ FocusScope {
     signal navigateTo(string path, var params, var listState)
     signal goBack()
 
-    property string libraryId: navParams.libraryId || ""
+    property string parentId: navParams.parentId || navParams.libraryId || ""
+    property string libraryId: navParams.libraryId || parentId
     property string libraryName: navParams.libraryName || ""
+    property string collectionType: navParams.collectionType || ""
+    property string itemType: navParams.itemType || "Movie"
+    property bool recursive: navParams.recursive !== undefined ? Boolean(navParams.recursive) : true
+    property string seriesName: navParams.seriesName || ""
+    property string seasonName: navParams.seasonName || ""
+    property var seriesItem: navParams.seriesItem || ({})
+    property bool showSeriesMetadata: itemType === "Season" && seriesItem && seriesItem.id
     property var allItems: []
     property var items: []
     property string filterText: navListState.filterText || ""
@@ -45,7 +54,7 @@ FocusScope {
             var matches = []
             for (var i = 0; i < allItems.length; i++) {
                 var item = allItems[i]
-                if (normalizeText(item.title || item.name || "").indexOf(q) >= 0)
+                if (normalizeText(JellyfinMedia.searchText(item)).indexOf(q) >= 0)
                     matches.push(item)
             }
             items = matches
@@ -59,6 +68,18 @@ FocusScope {
         } else {
             itemList.currentIndex = -1
         }
+    }
+
+    function subtitleText() {
+        return JellyfinMedia.breadcrumbText([libraryName, seriesName, seasonName])
+    }
+
+    function emptyLabel() {
+        if (filterText !== "") return "NO MATCHES"
+        if (itemType === "Series") return "NO SHOWS FOUND"
+        if (itemType === "Season") return "NO SEASONS FOUND"
+        if (itemType === "Episode") return "NO EPISODES FOUND"
+        return "NO ITEMS FOUND"
     }
 
     function handleKey(event) {
@@ -113,9 +134,44 @@ FocusScope {
     function selectCurrentItem() {
         var item = items[itemList.currentIndex]
         if (!item) return
+
+        if (item.type === "series") {
+            itemListRoot.navigateTo("Items.qml", {
+                parentId: item.id,
+                libraryId: libraryId,
+                libraryName: libraryName,
+                collectionType: collectionType,
+                itemType: "Season",
+                recursive: false,
+                seriesName: JellyfinMedia.primaryTitle(item),
+                seriesItem: item
+            }, {
+                currentIndex: itemList.currentIndex,
+                filterText: filterText
+            })
+            return
+        }
+
+        if (item.type === "season") {
+            itemListRoot.navigateTo("Items.qml", {
+                parentId: item.id,
+                libraryId: libraryId,
+                libraryName: libraryName,
+                collectionType: collectionType,
+                itemType: "Episode",
+                recursive: false,
+                seriesName: seriesName,
+                seasonName: JellyfinMedia.primaryTitle(item)
+            }, {
+                currentIndex: itemList.currentIndex,
+                filterText: filterText
+            })
+            return
+        }
+
         itemListRoot.navigateTo("Detail.qml", {
             item: item,
-            libraryName: libraryName
+            libraryName: subtitleText()
         }, {
             currentIndex: itemList.currentIndex,
             filterText: filterText
@@ -153,7 +209,7 @@ FocusScope {
         isLoading = true
         isLoadingMore = false
         errorMessage = ""
-        jellyfinBackend.load_items(libraryId)
+        jellyfinBackend.load_items_for_type(parentId, itemType, recursive)
     }
 
     focus: true
@@ -162,7 +218,7 @@ FocusScope {
     AppBar {
         iconSource: moduleRoot.moduleIcon
         title: moduleRoot.moduleName
-        subtitle: libraryName
+        subtitle: subtitleText()
         anchors.top: parent.top
         anchors.left: parent.left
         anchors.topMargin: root.sh * 0.125
@@ -192,7 +248,7 @@ FocusScope {
 
     Text {
         visible: !isLoading && !isLoadingMore && errorMessage === "" && items.length === 0
-        text: filterText !== "" ? "NO MATCHES" : "NO ITEMS FOUND"
+        text: emptyLabel()
         color: root.tertiaryColor
         font.family: root.globalFont
         anchors.centerIn: parent
@@ -230,15 +286,99 @@ FocusScope {
         font.pixelSize: root.sh * 0.0333333
     }
 
-    ListView {
-        id: itemList
-        model: items
+    Item {
+        id: seriesDetails
+        visible: showSeriesMetadata
         anchors.top: parent.top
         anchors.left: parent.left
         anchors.topMargin: root.sh * 0.25
         anchors.leftMargin: root.sw * 0.115625
         width: root.sw * 0.76875
-        height: root.sh * 0.525
+        height: root.sh * 0.21875
+        clip: true
+
+        Column {
+            anchors.fill: parent
+            spacing: root.sh * 0.0104167
+
+            Text {
+                text: JellyfinMedia.primaryTitle(seriesItem)
+                color: root.primaryColor
+                font.family: root.globalFont
+                font.capitalization: Font.AllUppercase
+                elide: Text.ElideRight
+                width: parent.width
+                font.pixelSize: root.sh * 0.05
+            }
+
+            Text {
+                text: JellyfinMedia.seriesMetadataLine(seriesItem, allItems.length)
+                color: root.secondaryColor
+                font.family: root.globalFont
+                font.capitalization: Font.AllUppercase
+                elide: Text.ElideRight
+                width: parent.width
+                font.pixelSize: root.sh * 0.0333333
+            }
+
+            Text {
+                visible: JellyfinMedia.genreLine(seriesItem) !== ""
+                text: JellyfinMedia.genreLine(seriesItem)
+                color: root.tertiaryColor
+                font.family: root.globalFont
+                font.capitalization: Font.AllUppercase
+                elide: Text.ElideRight
+                width: parent.width
+                font.pixelSize: root.sh * 0.0291667
+            }
+
+            Item {
+                id: seriesSummaryContainer
+                width: parent.width
+                height: root.sh * 0.0875
+                clip: true
+
+                Text {
+                    id: seriesSummaryText
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    text: seriesItem.summary || ""
+                    color: root.primaryColor
+                    font.family: root.globalFont
+                    wrapMode: Text.WordWrap
+                    font.pixelSize: root.sh * 0.0291667
+                    lineHeight: 1.3
+                }
+
+                SequentialAnimation {
+                    running: showSeriesMetadata &&
+                             seriesSummaryText.text !== "" &&
+                             seriesSummaryText.implicitHeight > seriesSummaryContainer.height
+                    loops: Animation.Infinite
+                    onRunningChanged: if (!running) seriesSummaryText.y = 0
+                    PauseAnimation { duration: 3000 }
+                    NumberAnimation {
+                        target: seriesSummaryText
+                        property: "y"
+                        to: seriesSummaryContainer.height - seriesSummaryText.implicitHeight
+                        duration: Math.abs(to) * 120
+                    }
+                    PauseAnimation { duration: 4000 }
+                    PropertyAction { target: seriesSummaryText; property: "y"; value: 0 }
+                }
+            }
+        }
+    }
+
+    ListView {
+        id: itemList
+        model: items
+        anchors.top: parent.top
+        anchors.left: parent.left
+        anchors.topMargin: showSeriesMetadata ? root.sh * 0.4895833 : root.sh * 0.25
+        anchors.leftMargin: root.sw * 0.115625
+        width: root.sw * 0.76875
+        height: showSeriesMetadata ? root.sh * 0.2854167 : root.sh * 0.525
         clip: true
         focus: true
 

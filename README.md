@@ -15,16 +15,17 @@ The app is a browsing shell, not an embedded video renderer. It launches `mpv` a
 ### Jellyfin
 
 - Password login and Jellyfin Quick Connect.
-- Movie libraries only for the current implementation.
-- Large movie libraries load progressively in 250-item pages.
+- Movie libraries and TV show libraries.
+- TV browsing through shows, seasons, episodes, then the same metadata, track-selection, and playback flow used for movies.
+- Large movie and TV lists load progressively in 250-item pages.
 - Live title filter narrows the list as you type.
 - Accent-insensitive filtering, so names with characters like `e` and `é` match naturally.
-- Direct-play movie playback through mpv.
+- Direct-play movie and episode playback through mpv.
 - Resume prompt based on Jellyfin playback position.
-- Audio and subtitle selection before playback.
+- Audio and subtitle selection before movie and episode playback.
 - External Jellyfin subtitle URLs are loaded through authenticated mpv requests without putting access tokens in media URLs.
 
-Not yet implemented: TV/music libraries, Continue Watching hubs, playback progress reporting back to Jellyfin, watched-state updates, and transcoding fallback.
+Not yet implemented: music libraries, Continue Watching hubs, playback progress reporting back to Jellyfin, watched-state updates, and transcoding fallback.
 
 ### Retro
 
@@ -37,6 +38,7 @@ Not yet implemented: TV/music libraries, Continue Watching hubs, playback progre
 ### Local
 
 - Folder browsing.
+- The first view shows the active media directory, defaulting to `~/Desktop`.
 - Common video file support: `mp4`, `mkv`, `avi`, `mov`, `m4v`, `webm`, `wmv`, `flv`, `f4v`, `mpg`, `mpeg`, `vob`.
 - `m3u` and `m3u8` playlists.
 - Loop and shuffle playback options.
@@ -48,6 +50,7 @@ Not yet implemented: TV/music libraries, Continue Watching hubs, playback progre
 
 - Looping background video playback.
 - Optional separate audio playlist.
+- The first view shows the active media directory, defaulting to `~/Desktop`.
 - Kept from the original project as a first-class module.
 
 ### Plex

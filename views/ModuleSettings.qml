@@ -71,10 +71,19 @@ FocusScope {
 
         if (type === "directory_browser") {
             var saved = currentValues[key] || ""
-            return saved !== "" ? saved : "Default"
+            return saved !== "" ? saved : defaultDirectoryPath(item)
         }
 
         return ""
+    }
+
+    function defaultDirectoryPath(item) {
+        var defaultPath = item.default || ""
+        if (defaultPath === "~")
+            return appCore.homePath()
+        if (defaultPath.indexOf("~/") === 0)
+            return appCore.homePath() + defaultPath.slice(1)
+        return defaultPath !== "" ? defaultPath : appCore.homePath()
     }
 
     function cycleValue(index, direction) {
@@ -212,7 +221,7 @@ FocusScope {
                 moduleSettingsRoot.navigateTo("views/DirectoryBrowser.qml", {
                     moduleId: moduleSettingsRoot.moduleId,
                     settingKey: item.key,
-                    currentPath: savedPath !== "" ? savedPath : appCore.homePath()
+                    currentPath: savedPath !== "" ? savedPath : moduleSettingsRoot.defaultDirectoryPath(item)
                 }, { currentIndex: settingsList.currentIndex })
             }
         }

@@ -1,6 +1,6 @@
 # Contributing to 240-mp-jellyfin
 
-240-mp-jellyfin is a focused macOS Apple Silicon fork of 240-MP. The goal is to keep the retro CRT-style media shell, keep Local, Loop, and Retro, and make Jellyfin the primary server-backed integration.
+240-mp-jellyfin is a focused macOS Apple Silicon fork of 240-MP. The goal is to keep the retro CRT-style media shell, keep Local and Loop, and make Jellyfin the primary server-backed integration.
 
 ## Getting Started
 
@@ -48,7 +48,7 @@ There is not yet a full automated test suite. Before opening a PR, run the check
 
 ```bash
 cmake --build build
-qmllint -I views modules/jellyfin/views/*.qml modules/retro_tv/views/*.qml modules/local_files/views/*.qml
+qmllint -I views modules/jellyfin/views/*.qml modules/retro_tv/views/*.qml modules/local_files/views/*.qml modules/ambient_mode/views/*.qml
 git diff --check
 ```
 
@@ -58,7 +58,8 @@ Manual checks for media changes:
 - Navigate without a mouse.
 - Confirm Jellyfin login, library loading, filtering, detail loading, and playback.
 - Confirm Retro feed loading, channel surfing, filtering, static transitions, and mpv playback.
-- Confirm Local Files browsing, track probing, sidecar subtitle discovery, and playback.
+- Confirm Local browsing, track probing, sidecar subtitle discovery, and playback.
+- Confirm Loop media directory display and looping playback.
 - Confirm app settings persist after restart.
 - For packaging changes, run `cmake --install` into a temporary prefix and verify bundled `mpv` and `ffprobe` launch.
 

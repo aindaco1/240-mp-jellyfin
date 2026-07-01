@@ -13,10 +13,26 @@ static const QStringList kAudioExts = {
     "mp3", "wav", "flac", "m4a", "m3u", "ogg", "aac", "m3u8"
 };
 
-AmbientModeBackend::AmbientModeBackend(const QString &dataRoot, QObject *parent)
-    : QObject(parent), m_dataRoot(dataRoot), m_mediaRoot(dataRoot + "/ambient")
+static QString defaultMediaRoot()
 {
-    // Resolve the configured media directory (falls back to the dataRoot/ambient default).
+    return QDir::home().filePath("Desktop");
+}
+
+static QString expandedMediaRoot(const QString &path)
+{
+    if (path.isEmpty())
+        return defaultMediaRoot();
+    if (path == "~")
+        return QDir::homePath();
+    if (path.startsWith("~/"))
+        return QDir::home().filePath(path.mid(2));
+    return path;
+}
+
+AmbientModeBackend::AmbientModeBackend(const QString &dataRoot, QObject *parent)
+    : QObject(parent), m_dataRoot(dataRoot), m_mediaRoot(defaultMediaRoot())
+{
+    // Resolve the configured media directory (falls back to ~/Desktop).
     QFile f(m_dataRoot + "/config.json");
     if (f.open(QIODevice::ReadOnly)) {
         QJsonObject cfg = QJsonDocument::fromJson(f.readAll()).object();
@@ -39,9 +55,9 @@ QString AmbientModeBackend::mediaRoot() const
 
 void AmbientModeBackend::setMediaRoot(const QString &path)
 {
-    m_mediaRoot = path;
-    QDir().mkpath(path);
-    qDebug("[AmbientMode] media root: %s", qPrintable(path));
+    m_mediaRoot = expandedMediaRoot(path);
+    QDir().mkpath(m_mediaRoot);
+    qDebug("[AmbientMode] media root: %s", qPrintable(m_mediaRoot));
 }
 
 QVariantList AmbientModeBackend::scanFiles(const QStringList &extensions) const

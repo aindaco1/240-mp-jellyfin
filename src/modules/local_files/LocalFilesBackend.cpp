@@ -70,10 +70,26 @@ static QString executablePathIfUsable(const QString &path) {
     return {};
 }
 
-LocalFilesBackend::LocalFilesBackend(const QString &appRoot, const QString &dataRoot, QObject *parent)
-    : QObject(parent), m_appRoot(appRoot), m_dataRoot(dataRoot), m_mediaRoot(dataRoot + "/media")
+static QString defaultMediaRoot()
 {
-    // Resolve the configured media directory (falls back to the dataRoot/media default).
+    return QDir::home().filePath("Desktop");
+}
+
+static QString expandedMediaRoot(const QString &path)
+{
+    if (path.isEmpty())
+        return defaultMediaRoot();
+    if (path == "~")
+        return QDir::homePath();
+    if (path.startsWith("~/"))
+        return QDir::home().filePath(path.mid(2));
+    return path;
+}
+
+LocalFilesBackend::LocalFilesBackend(const QString &appRoot, const QString &dataRoot, QObject *parent)
+    : QObject(parent), m_appRoot(appRoot), m_dataRoot(dataRoot), m_mediaRoot(defaultMediaRoot())
+{
+    // Resolve the configured media directory (falls back to ~/Desktop).
     QFile f(m_dataRoot + "/config.json");
     if (f.open(QIODevice::ReadOnly)) {
         QJsonObject cfg = QJsonDocument::fromJson(f.readAll()).object();
@@ -255,9 +271,9 @@ QString LocalFilesBackend::mediaRoot() const {
 }
 
 void LocalFilesBackend::setMediaRoot(const QString &path) {
-    m_mediaRoot = path;
-    QDir().mkpath(path);
-    qDebug("[LocalFiles] media root: %s", qPrintable(path));
+    m_mediaRoot = expandedMediaRoot(path);
+    QDir().mkpath(m_mediaRoot);
+    qDebug("[LocalFiles] media root: %s", qPrintable(m_mediaRoot));
 }
 
 void LocalFilesBackend::onSettingChanged(const QString &moduleId, const QString &key, const QVariant &value) {

@@ -1,6 +1,6 @@
 # Roadmap
 
-1.0 establishes the macOS-only Jellyfin fork: movie-library browsing, direct-play playback, Local Files support, Ambient Mode, bundled playback helpers, Retro decade feeds, and a hidden Plex reference module.
+1.0 establishes the macOS-only Jellyfin fork: movie-library browsing, direct-play playback, Local support, Loop, bundled playback helpers, and a hidden Plex reference module. Post-1.0 work has added TV show, season, and episode browsing plus Retro decade feeds.
 
 The next goal is to make 240-mp-jellyfin reliable as a daily-use macOS media app before expanding the media surface.
 
@@ -38,7 +38,7 @@ The next goal is to make 240-mp-jellyfin reliable as a daily-use macOS media app
 
 ### Jellyfin Media Scope
 
-- Add TV show, season, and episode browsing.
+- Polish TV browsing with better show/season resume shortcuts once Jellyfin playback reporting is reliable.
 - Add mixed video libraries if the UI can stay simple.
 - Decide whether music videos belong in Jellyfin scope or should be a separate module surface.
 
@@ -55,7 +55,7 @@ The next goal is to make 240-mp-jellyfin reliable as a daily-use macOS media app
 - Cache artwork carefully so large libraries do not slow startup.
 - Keep list-first navigation fast even if images are enabled later.
 
-### Local Files Improvements
+### Local Improvements
 
 - Cache `ffprobe` results per file mtime so returning to a detail screen is instant.
 - Add manual subtitle file selection for non-matching sidecars.
@@ -72,7 +72,7 @@ The next goal is to make 240-mp-jellyfin reliable as a daily-use macOS media app
 
 ### First-Run Setup
 
-- Start new users in a focused setup flow for Jellyfin sign-in and Local Files directory selection.
+- Start new users in a focused setup flow for Jellyfin sign-in and Local directory selection.
 - Show bundled helper versions and config paths in a diagnostics view.
 - Make auth/setup recoverable without requiring users to edit files.
 

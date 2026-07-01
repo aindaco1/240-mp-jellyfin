@@ -15,6 +15,19 @@ FocusScope {
     property string userName: ""
     property string errorMessage: ""
 
+    function browseParamsForLibrary(lib) {
+        var collectionType = String(lib.collectionType || "").toLowerCase()
+        var itemType = collectionType === "tvshows" ? "Series" : "Movie"
+        return {
+            parentId: lib.id,
+            libraryId: lib.id,
+            libraryName: lib.title,
+            collectionType: collectionType,
+            itemType: itemType,
+            recursive: true
+        }
+    }
+
     Connections {
         target: jellyfinBackend
         function onLibrariesLoaded(items) {
@@ -86,10 +99,8 @@ FocusScope {
         Keys.onReturnPressed: {
             var lib = libraries[currentIndex]
             if (!lib) return
-            browseRoot.navigateTo("Items.qml", {
-                libraryId: lib.id,
-                libraryName: lib.title
-            }, { currentIndex: libraryList.currentIndex })
+            browseRoot.navigateTo("Items.qml", browseRoot.browseParamsForLibrary(lib),
+                                  { currentIndex: libraryList.currentIndex })
         }
         Keys.onPressed: function(event) {
             if (event.key === Qt.Key_Escape || event.key === Qt.Key_Backspace || event.key === Qt.Key_Back) {

@@ -1,5 +1,6 @@
 import QtQuick
 import Components
+import "JellyfinMedia.js" as JellyfinMedia
 
 FocusScope {
     id: detailRoot
@@ -19,64 +20,14 @@ FocusScope {
     property int audioIdx: 0
     property int subtitleIdx: 0
 
-    function durationStr(ms) {
-        if (!ms) return ""
-        var totalMin = Math.floor(ms / 60000)
-        var h = Math.floor(totalMin / 60)
-        var m = totalMin % 60
-        if (h > 0) return h + "HR:" + (m < 10 ? "0" : "") + m + "MIN"
-        return m + "MIN"
-    }
-
-    function buildSubtitleStreams(d) {
-        var subs = [{ "id": "-1", "mpvTrack": -1, "displayTitle": "OFF", "subFile": "" }]
-        var loaded = d.subtitleStreams || []
-        for (var i = 0; i < loaded.length; i++)
-            subs.push(loaded[i])
-        return subs
-    }
-
-    function maxFocusRow() {
-        var maxRow = 0
-        if (audioStreams.length > 0)
-            maxRow = 1
-        if (subtitleStreams.length > 1)
-            maxRow = 2
-        return maxRow
-    }
-
-    function selectedAudioTrack() {
-        if (!audioStreams[audioIdx])
-            return 0
-        return audioStreams[audioIdx].mpvTrack || 0
-    }
-
-    function selectedSubtitleTrack() {
-        var selected = subtitleStreams[subtitleIdx]
-        if (!selected)
-            return -1
-        if (selected.subFile && selected.subFile !== "")
-            return 0
-        if (selected.mpvTrack !== undefined && selected.mpvTrack !== null)
-            return selected.mpvTrack
-        return -1
-    }
-
-    function selectedSubtitleFiles() {
-        var selected = subtitleStreams[subtitleIdx]
-        if (selected && selected.subFile && selected.subFile !== "")
-            return [selected.subFile]
-        return []
-    }
-
     Connections {
         target: jellyfinBackend
         function onItemLoaded(d) {
             detailRoot.detail = d
             detailRoot.errorMessage = ""
             detailRoot.audioStreams = d.audioStreams || []
-            detailRoot.subtitleStreams = buildSubtitleStreams(d)
-            detailRoot.audioIdx = 0
+            detailRoot.subtitleStreams = JellyfinMedia.buildSubtitleStreams(d)
+            detailRoot.audioIdx = JellyfinMedia.defaultAudioIndex(detailRoot.audioStreams)
             detailRoot.subtitleIdx = 0
             detailRoot.focusRow = 0
         }
@@ -86,12 +37,12 @@ FocusScope {
                 streamUrl: url,
                 httpHeaders: headers,
                 itemId: detailRoot.detail.id,
-                title: detailRoot.detail.title,
+                title: JellyfinMedia.playbackTitle(detailRoot.detail),
                 viewOffset: detailRoot.detail.viewOffset || 0,
                 duration: detailRoot.detail.duration || 0,
-                audioTrack: selectedAudioTrack(),
-                subtitleTrack: selectedSubtitleTrack(),
-                subtitleFiles: selectedSubtitleFiles()
+                audioTrack: JellyfinMedia.selectedAudioTrack(audioStreams, audioIdx),
+                subtitleTrack: JellyfinMedia.selectedSubtitleTrack(subtitleStreams, subtitleIdx),
+                subtitleFiles: JellyfinMedia.selectedSubtitleFiles(subtitleStreams, subtitleIdx)
             })
         }
         function onErrorOccurred(message) {
@@ -112,7 +63,7 @@ FocusScope {
     }
     Keys.onDownPressed: {
         if (detail) {
-            var maxRow = maxFocusRow()
+            var maxRow = JellyfinMedia.maxTrackFocusRow(audioStreams, subtitleStreams)
             if (focusRow < maxRow)
                 focusRow++
         }
@@ -210,7 +161,7 @@ FocusScope {
                 spacing: root.sh * 0.0166667
 
                 Text {
-                    text: detail ? detail.title : ""
+                    text: JellyfinMedia.primaryTitle(detail)
                     color: root.primaryColor
                     font.family: root.globalFont
                     font.capitalization: Font.AllUppercase
@@ -220,13 +171,7 @@ FocusScope {
                 }
 
                 Text {
-                    text: {
-                        if (!detail) return ""
-                        var parts = []
-                        if (detail.year) parts.push(String(detail.year))
-                        if (detail.duration) parts.push(durationStr(detail.duration))
-                        return parts.join(" - ")
-                    }
+                    text: JellyfinMedia.metadataLine(detail)
                     color: root.secondaryColor
                     font.family: root.globalFont
                     font.capitalization: Font.AllUppercase

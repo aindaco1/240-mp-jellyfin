@@ -15,7 +15,7 @@
       "key": "media_directory",
       "label": "Media Directory",
       "type": "directory_browser",
-      "default": ""
+      "default": "~/Desktop"
     }
   ]
 }

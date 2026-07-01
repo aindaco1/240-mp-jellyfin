@@ -6,9 +6,14 @@ All notable changes to 240-mp-jellyfin are documented here.
 
 ### Added
 
+- Added Jellyfin TV show library browsing through series, season, and episode lists, with episodes using the existing detail and mpv playback flow.
+- Added shared Jellyfin movie/episode detail metadata and audio/subtitle selection, including clearer episode labels and default/forced/external stream flags.
+- Added a TV show metadata header on the season list with show overview, year, counts, status, rating, and genres when Jellyfin provides them.
 - Added the Retro module with MyRetroTVs-backed feeds for the 50s, 60s, 70s, 80s, 90s, and 00s.
 - Added Retro channel surfing, content filtering, clip skipping, YouTube handoff through mpv, CRT-style effects, and static transitions.
+- Renamed Ambient Mode to Loop and Local Files to Local in the UI, showed each media directory on its first view, and defaulted both directories to `~/Desktop`.
 - Ordered user-facing modules as Jellyfin, Retro, Local, then Loop.
+- Filtered Jellyfin episode list loading so virtual/missing episode rows do not appear in TV seasons.
 
 ## [1.0] - 2026-06-12
 

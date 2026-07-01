@@ -35,6 +35,19 @@ FocusScope {
         anchors.leftMargin: root.sw * 0.125 //80
     }
 
+    Text {
+        text: "Media Directory: " + localFilesBackend.mediaRoot()
+        color: root.tertiaryColor
+        font.family: root.globalFont
+        anchors.top: parent.top
+        anchors.left: parent.left
+        anchors.topMargin: root.sh * 0.1958333
+        anchors.leftMargin: root.sw * 0.125
+        width: root.sw * 0.76875
+        elide: Text.ElideRight
+        font.pixelSize: root.sh * 0.0291667
+    }
+
     // Empty state
     Column {
         anchors.centerIn: parent
@@ -51,7 +64,7 @@ FocusScope {
         }
         Text {
             visible: pinCode !== ""
-            text: "Please add items in the local files media directory"
+            text: "Please add items in the local media directory"
             color: root.tertiaryColor
             font.family: root.globalFont
             font.capitalization: Font.AllUppercase

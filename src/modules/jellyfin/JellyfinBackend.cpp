@@ -15,6 +15,36 @@
 
 static constexpr int kItemsPageSize = 250;
 
+static QString browseItemFields(const QString &itemType) {
+    QString fields = QStringLiteral("RunTimeTicks,ProductionYear,UserData,SeriesName,SeasonName,IndexNumber,ParentIndexNumber");
+    if (itemType == "Series")
+        fields += QStringLiteral(",Overview,RecursiveItemCount,ChildCount,Status,Genres,CommunityRating,OfficialRating");
+    return fields;
+}
+
+static QString detailItemFields() {
+    return browseItemFields(QStringLiteral("Episode")) +
+           QStringLiteral(",Overview,MediaSources,MediaStreams,Genres,CommunityRating,OfficialRating,Status");
+}
+
+static QString normalizedBrowseItemType(const QString &itemType) {
+    const QString trimmed = itemType.trimmed();
+    if (trimmed.compare("Movie", Qt::CaseInsensitive) == 0)
+        return QStringLiteral("Movie");
+    if (trimmed.compare("Series", Qt::CaseInsensitive) == 0)
+        return QStringLiteral("Series");
+    if (trimmed.compare("Season", Qt::CaseInsensitive) == 0)
+        return QStringLiteral("Season");
+    if (trimmed.compare("Episode", Qt::CaseInsensitive) == 0)
+        return QStringLiteral("Episode");
+    return {};
+}
+
+static QString itemCacheKey(const QString &parentId, const QString &itemType, bool recursive) {
+    return QString("%1|%2|%3").arg(parentId, itemType, recursive ? QStringLiteral("recursive")
+                                                                 : QStringLiteral("direct"));
+}
+
 JellyfinBackend::JellyfinBackend(const QString &appRoot, const QString &dataRoot, QObject *parent)
     : QObject(parent)
     , m_dataRoot(dataRoot)
@@ -316,31 +346,43 @@ void JellyfinBackend::load_libraries() {
 }
 
 void JellyfinBackend::load_items(const QString &libraryId) {
+    load_items_for_type(libraryId, QStringLiteral("Movie"), true);
+}
+
+void JellyfinBackend::load_items_for_type(const QString &parentId, const QString &itemType, bool recursive) {
     const QString base = serverUrl();
     const QString uid = userId();
-    if (base.isEmpty() || uid.isEmpty() || libraryId.isEmpty()) {
+    if (base.isEmpty() || uid.isEmpty() || parentId.isEmpty()) {
         emit errorOccurred("Jellyfin library selection is invalid.");
         return;
     }
 
+    const QString normalizedItemType = normalizedBrowseItemType(itemType);
+    if (normalizedItemType.isEmpty()) {
+        emit errorOccurred("Jellyfin item type is not supported.");
+        return;
+    }
+
+    const QString cacheKey = itemCacheKey(parentId, normalizedItemType, recursive);
     const int generation = ++m_itemsLoadGeneration;
     m_itemsLoadAccumulator.clear();
-    if (m_itemCache.contains(libraryId)) {
-        const QVariantList cached = m_itemCache.value(libraryId);
+    if (m_itemCache.contains(cacheKey)) {
+        const QVariantList cached = m_itemCache.value(cacheKey);
         emit itemsPageLoaded(cached, true, true);
         return;
     }
 
-    load_items_page(libraryId, 0, generation);
+    load_items_page(parentId, normalizedItemType, recursive, 0, generation);
 }
 
-void JellyfinBackend::load_items_page(const QString &libraryId, int startIndex, int generation) {
+void JellyfinBackend::load_items_page(const QString &parentId, const QString &itemType, bool recursive,
+                                      int startIndex, int generation) {
     if (generation != m_itemsLoadGeneration)
         return;
 
     const QString base = serverUrl();
     const QString uid = userId();
-    if (base.isEmpty() || uid.isEmpty() || libraryId.isEmpty()) {
+    if (base.isEmpty() || uid.isEmpty() || parentId.isEmpty()) {
         emit errorOccurred("Jellyfin library selection is invalid.");
         return;
     }
@@ -348,12 +390,19 @@ void JellyfinBackend::load_items_page(const QString &libraryId, int startIndex, 
     QUrl url(base + "/Items");
     QUrlQuery query;
     query.addQueryItem("userId", uid);
-    query.addQueryItem("parentId", libraryId);
-    query.addQueryItem("recursive", "true");
-    query.addQueryItem("includeItemTypes", "Movie");
-    query.addQueryItem("fields", "RunTimeTicks,ProductionYear,UserData");
+    query.addQueryItem("parentId", parentId);
+    query.addQueryItem("recursive", recursive ? "true" : "false");
+    query.addQueryItem("includeItemTypes", itemType);
+    query.addQueryItem("fields", browseItemFields(itemType));
     query.addQueryItem("enableImages", "false");
     query.addQueryItem("enableTotalRecordCount", "false");
+    if (itemType == "Episode") {
+        query.addQueryItem("mediaTypes", "Video");
+        query.addQueryItem("excludeLocationTypes", "Virtual");
+        query.addQueryItem("isMissing", "false");
+        query.addQueryItem("isPlaceHolder", "false");
+        query.addQueryItem("isUnaired", "false");
+    }
     query.addQueryItem("startIndex", QString::number(startIndex));
     query.addQueryItem("limit", QString::number(kItemsPageSize));
     query.addQueryItem("sortBy", "SortName");
@@ -361,7 +410,7 @@ void JellyfinBackend::load_items_page(const QString &libraryId, int startIndex, 
     url.setQuery(query);
 
     QNetworkReply *reply = jellyfinGet(url);
-    connect(reply, &QNetworkReply::finished, this, [this, reply, libraryId, startIndex, generation]() {
+    connect(reply, &QNetworkReply::finished, this, [this, reply, parentId, itemType, recursive, startIndex, generation]() {
         const QByteArray data = reply->readAll();
         const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
         const QNetworkReply::NetworkError error = reply->error();
@@ -386,6 +435,9 @@ void JellyfinBackend::load_items_page(const QString &libraryId, int startIndex, 
         const QJsonArray rawItems = doc.object()["Items"].toArray();
         for (const QJsonValue &value : rawItems) {
             const QJsonObject item = value.toObject();
+            if (item["Id"].toString().isEmpty())
+                continue;
+
             const QVariantMap formatted = formatItem(item);
             if (!formatted["id"].toString().isEmpty()) {
                 pageItems.append(formatted);
@@ -397,12 +449,12 @@ void JellyfinBackend::load_items_page(const QString &libraryId, int startIndex, 
         emit itemsPageLoaded(pageItems, startIndex == 0, finished);
 
         if (finished) {
-            m_itemCache.insert(libraryId, m_itemsLoadAccumulator);
+            m_itemCache.insert(itemCacheKey(parentId, itemType, recursive), m_itemsLoadAccumulator);
             m_itemsLoadAccumulator.clear();
             return;
         }
 
-        load_items_page(libraryId, startIndex + rawItems.size(), generation);
+        load_items_page(parentId, itemType, recursive, startIndex + rawItems.size(), generation);
     });
 }
 
@@ -417,7 +469,7 @@ void JellyfinBackend::load_item_detail(const QString &itemId) {
     QUrl url(base + "/Items/" + itemId);
     QUrlQuery query;
     query.addQueryItem("userId", uid);
-    query.addQueryItem("fields", "Overview,RunTimeTicks,ProductionYear,UserData,MediaSources");
+    query.addQueryItem("fields", detailItemFields());
     url.setQuery(query);
 
     QNetworkReply *reply = jellyfinGet(url);
@@ -597,13 +649,40 @@ QVariantMap JellyfinBackend::formatLibrary(const QJsonObject &item) const {
 
 QString JellyfinBackend::itemTitle(const QJsonObject &item) {
     const QString type = item["Type"].toString();
-    if (type == "Episode") {
-        const QString series = item["SeriesName"].toString();
-        const QString name = item["Name"].toString();
-        if (!series.isEmpty() && !name.isEmpty())
-            return QString("%1 - %2").arg(series, name);
+    const QString name = item["Name"].toString();
+
+    if (type == "Season") {
+        if (!name.isEmpty())
+            return name;
+
+        const int seasonNumber = item["IndexNumber"].toInt(-1);
+        if (seasonNumber == 0)
+            return QStringLiteral("Specials");
+        if (seasonNumber > 0)
+            return QString("Season %1").arg(seasonNumber);
     }
-    return item["Name"].toString();
+
+    if (type == "Episode") {
+        const QString code = episodeCode(item);
+        if (!code.isEmpty() && !name.isEmpty())
+            return QString("%1 - %2").arg(code, name);
+        if (!code.isEmpty())
+            return code;
+    }
+
+    return name;
+}
+
+QString JellyfinBackend::episodeCode(const QJsonObject &item) {
+    const int seasonNumber = item["ParentIndexNumber"].toInt(-1);
+    const int episodeNumber = item["IndexNumber"].toInt(-1);
+
+    QString code;
+    if (seasonNumber >= 0)
+        code += QString("S%1").arg(seasonNumber, 2, 10, QChar('0'));
+    if (episodeNumber >= 0)
+        code += QString("E%1").arg(episodeNumber, 2, 10, QChar('0'));
+    return code;
 }
 
 static QString jellyfinStreamLabel(const QJsonObject &stream, const QString &fallbackPrefix, int trackNumber) {
@@ -631,6 +710,17 @@ static QString jellyfinStreamLabel(const QJsonObject &stream, const QString &fal
         if (!details.isEmpty())
             label += " (" + details.join(", ") + ")";
     }
+
+    QStringList flags;
+    if (stream["IsDefault"].toBool(false))
+        flags << "DEFAULT";
+    if (stream["IsForced"].toBool(false))
+        flags << "FORCED";
+    if (stream["IsExternal"].toBool(false))
+        flags << "EXTERNAL";
+    if (!flags.isEmpty())
+        label += " [" + flags.join(", ") + "]";
+
     return label.toUpper();
 }
 
@@ -656,13 +746,27 @@ static QString jellyfinSubtitleUrl(const QString &base, const QJsonObject &strea
 
 QVariantMap JellyfinBackend::formatItem(const QJsonObject &item) const {
     QVariantMap out;
+    const QString itemType = item["Type"].toString();
     out["id"] = item["Id"].toString();
     out["title"] = itemTitle(item);
     out["name"] = item["Name"].toString();
-    out["type"] = item["Type"].toString().toLower();
+    out["type"] = itemType.toLower();
     out["summary"] = item["Overview"].toString();
     out["year"] = item["ProductionYear"].toInt();
     out["duration"] = ticksToMs(item["RunTimeTicks"].toVariant().toLongLong());
+    out["officialRating"] = item["OfficialRating"].toString();
+    out["communityRating"] = item["CommunityRating"].toVariant();
+    out["status"] = item["Status"].toString();
+    out["genres"] = item["Genres"].toArray().toVariantList();
+    out["childCount"] = item["ChildCount"].toInt();
+    out["recursiveItemCount"] = item["RecursiveItemCount"].toInt();
+    out["seriesName"] = item["SeriesName"].toString();
+    out["seasonName"] = item["SeasonName"].toString();
+    out["index"] = item["IndexNumber"].toInt(-1);
+    out["indexNumber"] = item["IndexNumber"].toInt(-1);
+    out["parentIndex"] = item["ParentIndexNumber"].toInt(-1);
+    out["parentIndexNumber"] = item["ParentIndexNumber"].toInt(-1);
+    out["episodeCode"] = itemType == "Episode" ? episodeCode(item) : QString();
 
     const QJsonObject userData = item["UserData"].toObject();
     out["viewOffset"] = ticksToMs(userData["PlaybackPositionTicks"].toVariant().toLongLong());
@@ -694,6 +798,7 @@ QVariantMap JellyfinBackend::formatItem(const QJsonObject &item) const {
                 {"id", QString::number(stream["Index"].toInt(audioTrack))},
                 {"streamIndex", stream["Index"].toInt(-1)},
                 {"mpvTrack", audioTrack},
+                {"isDefault", stream["IsDefault"].toBool(false)},
                 {"displayTitle", jellyfinStreamLabel(stream, "AUDIO", audioTrack)}
             });
         } else if (type.compare("Subtitle", Qt::CaseInsensitive) == 0) {
@@ -718,6 +823,8 @@ QVariantMap JellyfinBackend::formatItem(const QJsonObject &item) const {
                 {"mpvTrack", mpvTrack},
                 {"displayTitle", jellyfinStreamLabel(stream, "SUBTITLE", subtitleTrack)},
                 {"isExternal", isExternal},
+                {"isDefault", stream["IsDefault"].toBool(false)},
+                {"isForced", stream["IsForced"].toBool(false)},
                 {"subFile", subUrl}
             });
         }

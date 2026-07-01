@@ -26,6 +26,7 @@ public:
 
     Q_INVOKABLE void load_libraries();
     Q_INVOKABLE void load_items(const QString &libraryId);
+    Q_INVOKABLE void load_items_for_type(const QString &parentId, const QString &itemType, bool recursive);
     Q_INVOKABLE void load_item_detail(const QString &itemId);
     Q_INVOKABLE void build_stream_url(const QString &itemId, const QString &mediaSourceId = QString());
 
@@ -68,11 +69,13 @@ private:
     bool saveAuthenticationResult(const QJsonObject &result, const QString &baseUrl);
     void pollQuickConnect();
     void authenticateWithQuickConnectSecret();
-    void load_items_page(const QString &libraryId, int startIndex, int generation);
+    void load_items_page(const QString &parentId, const QString &itemType, bool recursive,
+                         int startIndex, int generation);
     QVariantMap formatLibrary(const QJsonObject &item) const;
     QVariantMap formatItem(const QJsonObject &item) const;
     static int ticksToMs(qint64 ticks);
     static QString itemTitle(const QJsonObject &item);
+    static QString episodeCode(const QJsonObject &item);
 
     QString m_dataRoot;
     QNetworkAccessManager *m_nam;
