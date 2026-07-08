@@ -53,7 +53,7 @@ The guiding idea: **browse structured content, then hand off to the right tool f
   CMakeLists.txt
 ```
 
-The user-facing modules today are `jellyfin`, `retro_tv` (displayed as Retro), `local_files` (displayed as Local), and `ambient_mode` (displayed as Loop). They appear in that order on the module list. `plex` remains installed and registerable, but its manifest is marked `hidden: true` while Jellyfin moves toward parity.
+The user-facing modules today are `jellyfin`, `retro_tv` (displayed as Retro), `local_files` (displayed as Local), `ambient_mode` (displayed as Loop), and `tumblr_screensaver` (displayed as Tumblr). They appear in that order on the module list. `plex` remains installed and registerable, but its manifest is marked `hidden: true` while Jellyfin moves toward parity.
 
 ## Anatomy of a Module
 
@@ -232,6 +232,17 @@ The Retro module lives entirely in `modules/retro_tv/`; it has no C++ backend.
 - `Player.qml` hands decoded YouTube watch URLs to mpv through `MpvController`, using custom input bindings for channel surfing, clip skipping, filtering, special effects, and exit behavior.
 - CRT effects are mpv video filters where possible; the static transition is a QML fullscreen noise overlay shown during channel and clip handoff.
 - Because feeds are remote and YouTube-backed, local development playback depends on a working `mpv` plus `yt-dlp` on `PATH` or in the packaged helper bundle.
+
+## Tumblr Screensaver Module
+
+The Tumblr module lives in `modules/tumblr_screensaver/` and `src/modules/tumblr_screensaver/`.
+
+- Users enter a public Tumblr URL in the module's first view; the URL is persisted through `appCore.save_setting(...)`.
+- `TumblrScreensaverBackend` fetches Tumblr's public JSON feed pages through `/api/read/json`, using `posts-total` and paged `start`/`num` requests to collect the blog.
+- The backend extracts Tumblr-hosted image URLs from post HTML, prefers the largest `srcset` candidate for still images, keeps GIF sources when present, and deduplicates exact image URLs.
+- `Player.qml` renders a fullscreen QML image montage, shuffling the loaded images so a cycle does not repeat until every image has been shown once.
+- Transitions are handled entirely in QML with retro slide/zoom/fade motion, scanlines, and falling-block effects rather than mpv.
+- Falling-block transitions divide the incoming image into clipped tile regions so the next screen appears on the blocks as they fall.
 
 ## Track Selection
 
@@ -430,7 +441,8 @@ User configuration is stored in `config.json` in the app's data directory:
   "modules": {
     "com.240mp.jellyfin": { "enabled": true, "resume_playback": "ask", "video_quality": "direct" },
     "com.240mp.local_files": { "enabled": true, "media_directory": "~/Desktop" },
-    "com.240mp.ambient_mode": { "enabled": false, "media_directory": "~/Desktop" }
+    "com.240mp.ambient_mode": { "enabled": false, "media_directory": "~/Desktop" },
+    "com.240mp.tumblr_screensaver": { "enabled": true, "tumblr_url": "https://pixelskylines.tumblr.com/" }
   }
 }
 ```

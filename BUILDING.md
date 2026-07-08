@@ -134,7 +134,7 @@ Recommended checks before committing code changes:
 
 ```bash
 cmake --build build
-qmllint -I views modules/jellyfin/views/*.qml modules/retro_tv/views/*.qml modules/local_files/views/*.qml modules/ambient_mode/views/*.qml
+qmllint -I views modules/jellyfin/views/*.qml modules/retro_tv/views/*.qml modules/local_files/views/*.qml modules/ambient_mode/views/*.qml modules/tumblr_screensaver/views/*.qml
 git diff --check
 ```
 

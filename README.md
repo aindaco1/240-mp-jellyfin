@@ -1,6 +1,6 @@
 # 240-mp-jellyfin
 
-240-mp-jellyfin is a macOS Apple Silicon fork of 240-MP: a retro VCR-style media shell built with C++ Qt 6 and QML. The fork keeps the CRT/240p-inspired interface, Local playback, Loop, and Retro decade feeds, then adds Jellyfin as the main server-backed media module.
+240-mp-jellyfin is a macOS Apple Silicon fork of 240-MP: a retro VCR-style media shell built with C++ Qt 6 and QML. The fork keeps the CRT/240p-inspired interface, Local playback, Loop, Retro decade feeds, and a Tumblr image screensaver, then adds Jellyfin as the main server-backed media module.
 
 The app is a browsing shell, not an embedded video renderer. It launches `mpv` as a subprocess for playback and uses `ffprobe` to inspect local audio/subtitle tracks. Development builds use Homebrew tools from `PATH`; packaged macOS apps bundle `mpv`, `ffprobe`, and their non-system dynamic libraries so end users do not need Homebrew runtime dependencies.
 
@@ -52,6 +52,13 @@ Not yet implemented: music libraries, Continue Watching hubs, playback progress 
 - Optional separate audio playlist.
 - The first view shows the active media directory, defaulting to `~/Desktop`.
 - Kept from the original project as a first-class module.
+
+### Tumblr
+
+- Public Tumblr URL input, defaulting to `https://pixelskylines.tumblr.com/` for quick testing.
+- Image discovery through Tumblr's public `/api/read/json` feed pages.
+- Fullscreen image montage that shuffles the image deck and does not repeat until every discovered image has been shown.
+- Retro 90s-style QML transitions, including falling blocks built from clipped pieces of the incoming image.
 
 ### Plex
 

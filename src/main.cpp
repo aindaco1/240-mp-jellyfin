@@ -14,6 +14,7 @@
 #include "modules/plex/PlexBackend.h"
 #include "modules/jellyfin/JellyfinBackend.h"
 #include "modules/ambient_mode/AmbientModeBackend.h"
+#include "modules/tumblr_screensaver/TumblrScreensaverBackend.h"
 #include "player/MpvController.h"
 #ifdef Q_OS_MAC
 #include "macos_utils.h"
@@ -79,6 +80,7 @@ int main(int argc, char *argv[]) {
     PlexBackend         plexBackend(appRoot, dataRoot);
     JellyfinBackend     jellyfinBackend(appRoot, dataRoot);
     AmbientModeBackend  ambientMode(dataRoot);
+    TumblrScreensaverBackend tumblrScreensaver;
     MpvController       mpvController(appRoot);
 
     // Each module backend is wired in one call: stored for action routing, exposed to QML
@@ -89,6 +91,7 @@ int main(int argc, char *argv[]) {
     appCore.registerModule("com.240mp.plex",         "plexBackend",        &plexBackend, ctx);
     appCore.registerModule("com.240mp.jellyfin",     "jellyfinBackend",    &jellyfinBackend, ctx);
     appCore.registerModule("com.240mp.ambient_mode", "ambientModeBackend", &ambientMode, ctx);
+    appCore.registerModule("com.240mp.tumblr_screensaver", "tumblrScreensaverBackend", &tumblrScreensaver, ctx);
 
     ctx->setContextProperty("appCore",       &appCore);
     ctx->setContextProperty("mpvController", &mpvController);

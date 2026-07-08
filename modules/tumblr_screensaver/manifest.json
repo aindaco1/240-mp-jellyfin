@@ -1,0 +1,15 @@
+{
+  "id": "com.240mp.tumblr_screensaver",
+  "name": "Tumblr",
+  "display_order": 50,
+  "icon": "assets/images/logo.svg",
+  "entry_point_qml": "views/Root.qml",
+  "settings": [
+    {
+      "key": "enabled",
+      "label": "ENABLED",
+      "type": "toggle",
+      "default": "ON"
+    }
+  ]
+}

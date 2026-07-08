@@ -40,6 +40,7 @@ add_executable(240mp
     src/modules/plex/PlexBackend.cpp
     src/modules/jellyfin/JellyfinBackend.cpp
     src/modules/ambient_mode/AmbientModeBackend.cpp
+    src/modules/tumblr_screensaver/TumblrScreensaverBackend.cpp
     src/player/MpvController.cpp
     src/macos_utils.mm
 )

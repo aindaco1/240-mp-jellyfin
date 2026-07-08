@@ -1,6 +1,6 @@
 # Roadmap
 
-1.0 establishes the macOS-only Jellyfin fork: movie-library browsing, direct-play playback, Local support, Loop, bundled playback helpers, and a hidden Plex reference module. Post-1.0 work has added TV show, season, and episode browsing plus Retro decade feeds.
+1.0 establishes the macOS-only Jellyfin fork: movie-library browsing, direct-play playback, Local support, Loop, bundled playback helpers, and a hidden Plex reference module. Post-1.0 work has added TV show, season, and episode browsing, Retro decade feeds, and a Tumblr image screensaver.
 
 The next goal is to make 240-mp-jellyfin reliable as a daily-use macOS media app before expanding the media surface.
 
