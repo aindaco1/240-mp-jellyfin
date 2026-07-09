@@ -14,6 +14,9 @@
 #include <QTemporaryFile>
 #include <QUrl>
 #include <QUrlQuery>
+#ifdef Q_OS_MACOS
+#include "macos_utils.h"
+#endif
 
 static QString executablePathIfUsable(const QString &path) {
     const QFileInfo info(path);
@@ -448,6 +451,13 @@ void MpvController::loadAndPlay(const QString &url, float startSeconds,
         args << QString("--input-conf=%1").arg(m_inputConfPath)
              << "--video-sync=audio"
              << "--fullscreen" << "--no-native-fs";
+#ifdef Q_OS_MACOS
+        const int externalScreenIndex = macExternalPlaybackScreenIndex();
+        if (externalScreenIndex >= 0) {
+            args << QString("--screen=%1").arg(externalScreenIndex)
+                 << QString("--fs-screen=%1").arg(externalScreenIndex);
+        }
+#endif
         qDebug("[MpvController] desktop launch: mpv %s", qPrintable(redactedArgsForLog(args).join(" ")));
         m_process->start(bin, args);
         m_connectTimer->start();

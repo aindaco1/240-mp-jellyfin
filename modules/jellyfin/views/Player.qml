@@ -1,4 +1,5 @@
 import QtQuick
+import Components
 
 FocusScope {
     id: playerRoot
@@ -98,9 +99,18 @@ FocusScope {
             startPlayback(resumeSetting === "no" ? 0 : viewOffset)
     }
 
-    Rectangle {
+    PlaybackControlPanel {
         anchors.fill: parent
-        color: "black"
+        title: itemTitle !== "" ? itemTitle : "JELLYFIN PLAYBACK"
+        subtitle: root.hasMediaOutputScreen ? "PLAYING ON MEDIA DISPLAY" : "PLAYING"
+        stateText: mpvController.duration > 0 ? (formatTime(mpvController.position) + " / " + formatTime(mpvController.duration)) : ""
+        footerText: "[ESC]:STOP [SPACE]:PAUSE [ARROWS]:SEEK"
+        controls: [
+            { key: "SPACE / ENTER", action: "Pause or resume" },
+            { key: "LEFT / RIGHT", action: "Seek" },
+            { key: "UP / DOWN", action: "Adjust playback" },
+            { key: "ESC / BACK", action: "Stop playback" }
+        ]
     }
 
     Rectangle {

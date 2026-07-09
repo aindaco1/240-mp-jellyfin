@@ -1,4 +1,5 @@
 import QtQuick
+import Components
 
 FocusScope {
     id: playerRoot
@@ -30,6 +31,7 @@ FocusScope {
     property int blockRows: 9
     property url blockImageSource: ""
     property var blockSeeds: []
+    property bool usingExternalOutput: false
 
     property real imageAXTo: 0
     property real imageAYTo: 0
@@ -241,17 +243,17 @@ FocusScope {
             setTargets(incoming, 0, 0, 1, 1, 0)
             setTargets(outgoing, 0, 0, 0, 1, 0)
         } else if (type === 1) {
-            incoming.x = root.sw
+            incoming.x = outputSurface.width
             setTargets(incoming, 0, 0, 1, 1, 0)
-            setTargets(outgoing, -root.sw, 0, 0.25, 1, 0)
+            setTargets(outgoing, -outputSurface.width, 0, 0.25, 1, 0)
         } else if (type === 2) {
-            incoming.x = -root.sw
+            incoming.x = -outputSurface.width
             setTargets(incoming, 0, 0, 1, 1, 0)
-            setTargets(outgoing, root.sw, 0, 0.25, 1, 0)
+            setTargets(outgoing, outputSurface.width, 0, 0.25, 1, 0)
         } else if (type === 3) {
-            incoming.y = root.sh
+            incoming.y = outputSurface.height
             setTargets(incoming, 0, 0, 1, 1, 0)
-            setTargets(outgoing, 0, -root.sh, 0.2, 1, 0)
+            setTargets(outgoing, 0, -outputSurface.height, 0.2, 1, 0)
         } else if (type === 4) {
             incoming.opacity = 0
             incoming.scale = 1.35
@@ -266,9 +268,9 @@ FocusScope {
         } else if (type === 6) {
             incoming.opacity = 0
             incoming.rotation = 12
-            incoming.x = root.sw * 0.18
+            incoming.x = outputSurface.width * 0.18
             setTargets(incoming, 0, 0, 1, 1, 0)
-            setTargets(outgoing, -root.sw * 0.18, 0, 0, 1, -12)
+            setTargets(outgoing, -outputSurface.width * 0.18, 0, 0, 1, -12)
         } else {
             startBlockOverlay(type - 7, incoming.source)
             incoming.opacity = 0
@@ -317,7 +319,12 @@ FocusScope {
         }
     }
 
-    Keys.onPressed: function(event) {
+    function activateExternalOutput() {
+        if (root.hasMediaOutputScreen)
+            usingExternalOutput = root.openMediaOutput(true, true)
+    }
+
+    function handlePlayerKey(event) {
         if (event.key === Qt.Key_Escape || event.key === Qt.Key_Back || event.key === Qt.Key_Backspace) {
             displayTimer.stop()
             transitioning = false
@@ -338,6 +345,10 @@ FocusScope {
             togglePause()
             event.accepted = true
         }
+    }
+
+    Keys.onPressed: function(event) {
+        handlePlayerKey(event)
     }
 
     Connections {
@@ -372,6 +383,14 @@ FocusScope {
         }
     }
 
+    Connections {
+        target: root
+        function onMediaOutputKeyPressed(event) {
+            if (usingExternalOutput)
+                handlePlayerKey(event)
+        }
+    }
+
     Timer {
         id: displayTimer
         interval: showDurationMs
@@ -386,10 +405,32 @@ FocusScope {
         onTriggered: statusText = ""
     }
 
-    Rectangle {
+    PlaybackControlPanel {
         anchors.fill: parent
-        color: "black"
+        visible: usingExternalOutput
+        title: blogTitle !== "" ? blogTitle : "TUMBLR MONTAGE"
+        subtitle: "SHOWING ON MEDIA DISPLAY"
+        stateText: loadState === "loading"
+                   ? (loadedImageCount + " IMAGES  " + postsSeen + "/" + (totalPosts >= 0 ? totalPosts : "?") + " POSTS")
+                   : loadState === "error" ? errorText : (paused ? "PAUSED" : imageTitle(currentImageIndex))
+        footerText: "[ESC]:BACK [SPACE]:PAUSE [RIGHT]:NEXT"
+        controls: [
+            { key: "RIGHT / DOWN", action: "Next image" },
+            { key: "SPACE", action: "Pause or resume" },
+            { key: "ESC / BACK", action: "Stop montage" }
+        ]
     }
+
+    Item {
+        id: outputSurface
+        parent: playerRoot.usingExternalOutput ? root.mediaOutputLayer : playerRoot
+        width: parent ? parent.width : playerRoot.width
+        height: parent ? parent.height : playerRoot.height
+
+        Rectangle {
+            anchors.fill: parent
+            color: "black"
+        }
 
     Image {
         id: imageA
@@ -452,11 +493,11 @@ FocusScope {
         opacity: 0.22
 
         Repeater {
-            model: Math.max(1, Math.floor(root.sh / 4))
+            model: Math.max(1, Math.floor(outputSurface.height / 4))
             Rectangle {
                 x: 0
                 y: index * 4
-                width: root.sw
+                width: outputSurface.width
                 height: 1
                 color: "black"
             }
@@ -486,18 +527,18 @@ FocusScope {
                 property real exitPhase: playerRoot.clamp01((playerRoot.blockProgress - 0.72 - waveDelay * 0.25) / 0.24)
                 property real enterEase: playerRoot.easeOutCubic(enterPhase)
                 property real exitEase: playerRoot.easeInCubic(exitPhase)
-                property real blockW: Math.ceil(root.sw / playerRoot.blockColumns) + 2
-                property real blockH: Math.ceil(root.sh / playerRoot.blockRows) + 2
-                property real homeX: col * (root.sw / playerRoot.blockColumns)
-                property real homeY: row * (root.sh / playerRoot.blockRows)
+                property real blockW: Math.ceil(outputSurface.width / playerRoot.blockColumns) + 2
+                property real blockH: Math.ceil(outputSurface.height / playerRoot.blockRows) + 2
+                property real homeX: col * (outputSurface.width / playerRoot.blockColumns)
+                property real homeY: row * (outputSurface.height / playerRoot.blockRows)
                 property url tileSource: playerRoot.blockImageSource
 
                 width: blockW
                 height: blockH
                 clip: true
                 x: homeX +
-                   (playerRoot.blockVariant === 1 ? Math.sin((row + seed) * 2.7) * root.sw * 0.018 * (1 - enterEase) : 0)
-                y: homeY - (1 - enterEase) * (root.sh * (0.45 + seed * 0.75))
+                   (playerRoot.blockVariant === 1 ? Math.sin((row + seed) * 2.7) * outputSurface.width * 0.018 * (1 - enterEase) : 0)
+                y: homeY - (1 - enterEase) * (outputSurface.height * (0.45 + seed * 0.75))
                 opacity: playerRoot.clamp01(enterPhase * 1.4) * (1 - exitPhase)
                 rotation: playerRoot.blockVariant === 2
                           ? (1 - enterEase) * (seed > 0.5 ? 18 : -18)
@@ -508,8 +549,8 @@ FocusScope {
 
                 Image {
                     source: parent.tileSource
-                    width: root.sw
-                    height: root.sh
+                    width: outputSurface.width
+                    height: outputSurface.height
                     x: -parent.homeX
                     y: -parent.homeY
                     fillMode: Image.PreserveAspectFit
@@ -522,7 +563,7 @@ FocusScope {
                     anchors.fill: parent
                     color: "transparent"
                     border.color: "#000000"
-                    border.width: Math.max(1, root.sh * 0.0015)
+                    border.width: Math.max(1, outputSurface.height * 0.0015)
                     opacity: 0.72
                 }
             }
@@ -537,8 +578,8 @@ FocusScope {
 
         Column {
             anchors.centerIn: parent
-            width: root.sw * 0.75
-            spacing: root.sh * 0.035
+            width: outputSurface.width * 0.75
+            spacing: outputSurface.height * 0.035
 
             Text {
                 width: parent.width
@@ -547,7 +588,7 @@ FocusScope {
                 color: root.secondaryColor
                 font.family: root.globalFont
                 font.capitalization: Font.AllUppercase
-                font.pixelSize: root.sh * 0.05
+                font.pixelSize: outputSurface.height * 0.05
                 wrapMode: Text.WordWrap
             }
 
@@ -560,7 +601,7 @@ FocusScope {
                 color: root.primaryColor
                 font.family: root.globalFont
                 font.capitalization: Font.AllUppercase
-                font.pixelSize: root.sh * 0.0333333
+                font.pixelSize: outputSurface.height * 0.0333333
                 wrapMode: Text.WordWrap
             }
 
@@ -571,7 +612,7 @@ FocusScope {
                 text: "[ENTER]:RETRY [ESC]:BACK"
                 color: root.tertiaryColor
                 font.family: root.globalFont
-                font.pixelSize: root.sh * 0.0333333
+                font.pixelSize: outputSurface.height * 0.0333333
             }
         }
     }
@@ -581,30 +622,39 @@ FocusScope {
         color: "#cc000000"
         anchors.left: parent.left
         anchors.bottom: parent.bottom
-        anchors.leftMargin: root.sw * 0.025
-        anchors.bottomMargin: root.sh * 0.025
-        width: Math.min(statusLabel.implicitWidth + root.sw * 0.025, root.sw * 0.9)
-        height: statusLabel.implicitHeight + root.sh * 0.016
+        anchors.leftMargin: outputSurface.width * 0.025
+        anchors.bottomMargin: outputSurface.height * 0.025
+        width: Math.min(statusLabel.implicitWidth + outputSurface.width * 0.025, outputSurface.width * 0.9)
+        height: statusLabel.implicitHeight + outputSurface.height * 0.016
         z: 1200
 
         Text {
             id: statusLabel
             anchors.centerIn: parent
-            width: parent.width - root.sw * 0.018
+            width: parent.width - outputSurface.width * 0.018
             text: statusText
             color: "white"
             font.family: root.globalFont
             font.capitalization: Font.AllUppercase
             elide: Text.ElideRight
-            font.pixelSize: root.sh * 0.0275
+            font.pixelSize: outputSurface.height * 0.0275
         }
     }
 
+    }
+
     Component.onCompleted: {
+        activateExternalOutput()
+
         if (tumblrUrl === "") {
             goBack()
             return
         }
         tumblrScreensaverBackend.loadImages(tumblrUrl)
+    }
+
+    Component.onDestruction: {
+        if (usingExternalOutput)
+            root.closeMediaOutput()
     }
 }

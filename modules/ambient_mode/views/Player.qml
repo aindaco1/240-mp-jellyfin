@@ -1,4 +1,5 @@
 import QtQuick
+import Components
 
 FocusScope {
     id: playerRoot
@@ -59,8 +60,16 @@ FocusScope {
             ambientModeBackend.startAudio(audioPath)
     }
 
-    Rectangle {
+    PlaybackControlPanel {
         anchors.fill: parent
-        color: "black"
+        title: "LOOP PLAYBACK"
+        subtitle: root.hasMediaOutputScreen ? "PLAYING ON MEDIA DISPLAY" : "PLAYING"
+        stateText: hasCustomAudio ? "SEPARATE AUDIO ACTIVE" : ""
+        footerText: "[ESC]:STOP [SPACE]:PAUSE"
+        controls: [
+            { key: "SPACE / ENTER", action: "Pause or resume video" },
+            { key: "ARROWS", action: "Forward to video controls" },
+            { key: "ESC / BACK", action: "Stop loop" }
+        ]
     }
 }

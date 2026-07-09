@@ -181,7 +181,7 @@ The current mpv implementation is a good reference implementation of the "browse
 
 ### How the hand-off works
 
-1. **Launch** — `loadAndPlay(url, startSeconds, audioTrack, subTrack, ...)` starts mpv as a `QProcess`. Playback parameters are passed as mpv command-line flags: `--start=<sec>` (resume offset), `--playlist-start=<n>`, `--loop-playlist=inf`, selected audio/subtitle tracks, sidecar subtitle files, optional video filters, optional input bindings, and so on. mpv is resolved from the app bundle first, then `PATH`; the app never links libmpv.
+1. **Launch** — `loadAndPlay(url, startSeconds, audioTrack, subTrack, ...)` starts mpv as a `QProcess`. Playback parameters are passed as mpv command-line flags: `--start=<sec>` (resume offset), `--playlist-start=<n>`, `--loop-playlist=inf`, selected audio/subtitle tracks, sidecar subtitle files, optional video filters, optional input bindings, and so on. On macOS, if another display is connected, mpv is launched fullscreen on the first non-main screen by default. `Main.qml` also owns a second-screen QML output layer for pure-QML media and mpv-adjacent overlays, while the primary window stays available as a playback control surface. mpv is resolved from the app bundle first, then `PATH`; the app never links libmpv.
 2. **Authenticated HTTP playback** — Jellyfin headers are written to a temporary owner-only mpv include file and passed with `--include=<file>`, so tokens are not exposed as normal command-line header arguments. Jellyfin stream URLs avoid `api_key` query tokens.
 3. **Control channel** — mpv is started with `--input-ipc-server=<socket>` (a Unix domain socket at `/tmp/240-mp-jellyfin-mpv.sock`). `MpvController` connects to it with a `QLocalSocket` and sends JSON commands via `sendCommand(QJsonArray)`. `seekTo()`, `sendKey()`, `setVideoFilters()`, and `showText()` go over this channel. mpv client messages using the `240mp-key` prefix are bridged back to QML through `mpvKeyPressed`.
 4. **State back to QML** — `MpvController` issues `observe_property` for `time-pos`, `duration`, and `playlist-pos`, and re-publishes them as `Q_PROPERTY`s + the `positionChanged` / `durationChanged` / `playlistPosChanged` signals. A watchdog timer logs a warning if no `time-pos` event arrives for about 30 s.
@@ -437,7 +437,11 @@ User configuration is stored in `config.json` in the app's data directory:
 
 ```json
 {
-  "app": { "color_scheme": "Video 1" },
+  "app": {
+    "color_scheme": "Video 1",
+    "prevent_sleep": "ON",
+    "battery_sleep_threshold": "10%"
+  },
   "modules": {
     "com.240mp.jellyfin": { "enabled": true, "resume_playback": "ask", "video_quality": "direct" },
     "com.240mp.local_files": { "enabled": true, "media_directory": "~/Desktop" },
@@ -447,4 +451,4 @@ User configuration is stored in `config.json` in the app's data directory:
 }
 ```
 
-Each module's settings live under `modules.<id>`. Use `save_setting` / `get_setting` (which support dot-notation keys) rather than writing the file directly. The data directory is created on first run and is separate from the app itself, so rebuilding never wipes user settings. For the exact macOS path, see [BUILDING.md](BUILDING.md#configuration).
+Each module's settings live under `modules.<id>`. App-wide settings live under `app`; `prevent_sleep` controls the macOS idle sleep assertion, and `battery_sleep_threshold` releases that assertion while the internal battery is discharging at or below the configured percentage so macOS can sleep normally. Use `save_setting` / `get_setting` (which support dot-notation keys) rather than writing the file directly. The data directory is created on first run and is separate from the app itself, so rebuilding never wipes user settings. For the exact macOS path, see [BUILDING.md](BUILDING.md#configuration).

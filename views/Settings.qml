@@ -38,6 +38,22 @@ FocusScope {
             value: appSettings["color_scheme"] || "Video 1",
             moduleId: ""
         })
+        items.push({
+            type: "list_single",
+            key: "prevent_sleep",
+            label: "Prevent Sleep",
+            options: ["ON", "OFF"],
+            value: appSettings["prevent_sleep"] || "ON",
+            moduleId: ""
+        })
+        items.push({
+            type: "list_single",
+            key: "battery_sleep_threshold",
+            label: "Battery Sleep At",
+            options: ["OFF", "5%", "10%", "15%", "20%"],
+            value: appSettings["battery_sleep_threshold"] || "10%",
+            moduleId: ""
+        })
 
         // MODULES section — only show modules with has_settings
         var hasModuleSettings = false

@@ -7,6 +7,7 @@
 #include <QCursor>
 #include <QDebug>
 #include <QWindow>
+#include <QScreen>
 #include <locale.h>
 
 #include "AppCore.h"
@@ -47,6 +48,33 @@ static QString resolveDataRoot() {
     return path;
 }
 
+static QScreen *resolveExternalMediaScreen() {
+    const QList<QScreen *> screens = QGuiApplication::screens();
+    QScreen *primary = QGuiApplication::primaryScreen();
+    for (QScreen *screen : screens) {
+        if (screen && screen != primary)
+            return screen;
+    }
+    return nullptr;
+}
+
+static bool preventSleepEnabledFromSettings(AppCore &appCore) {
+    const QString value = appCore.get_setting("", "prevent_sleep").toString().trimmed();
+    return value.isEmpty() || value.compare(QStringLiteral("ON"), Qt::CaseInsensitive) == 0;
+}
+
+static int lowBatteryThresholdFromSettings(AppCore &appCore) {
+    QString value = appCore.get_setting("", "battery_sleep_threshold").toString().trimmed();
+    if (value.isEmpty())
+        return 10;
+    if (value.compare(QStringLiteral("OFF"), Qt::CaseInsensitive) == 0)
+        return -1;
+    value.remove('%');
+    bool ok = false;
+    const int threshold = value.toInt(&ok);
+    return ok ? qBound(1, threshold, 100) : 10;
+}
+
 int main(int argc, char *argv[]) {
     QGuiApplication app(argc, argv);
     app.setApplicationName("240-mp-jellyfin");
@@ -83,6 +111,24 @@ int main(int argc, char *argv[]) {
     TumblrScreensaverBackend tumblrScreensaver;
     MpvController       mpvController(appRoot);
 
+#ifdef Q_OS_MAC
+    auto applySleepPreventionSettings = [&appCore]() {
+        configureMacSleepPrevention(preventSleepEnabledFromSettings(appCore),
+                                    lowBatteryThresholdFromSettings(appCore));
+    };
+    applySleepPreventionSettings();
+    QObject::connect(&appCore, &AppCore::appSettingChanged, &app,
+                     [&applySleepPreventionSettings](const QString &key, const QString &) {
+        if (key == QStringLiteral("prevent_sleep") ||
+            key == QStringLiteral("battery_sleep_threshold")) {
+            applySleepPreventionSettings();
+        }
+    });
+    QObject::connect(&app, &QCoreApplication::aboutToQuit, [] {
+        stopMacSleepPrevention();
+    });
+#endif
+
     // Each module backend is wired in one call: stored for action routing, exposed to QML
     // under its context-property name, and its optional signals/slots connected by
     // introspection. The module ID lives in exactly one place per module.
@@ -95,6 +141,14 @@ int main(int argc, char *argv[]) {
 
     ctx->setContextProperty("appCore",       &appCore);
     ctx->setContextProperty("mpvController", &mpvController);
+    QScreen *externalMediaScreen = resolveExternalMediaScreen();
+    QRect externalMediaGeometry = externalMediaScreen ? externalMediaScreen->geometry() : QRect(0, 0, macW, macH);
+    ctx->setContextProperty("hasExternalMediaScreen", externalMediaScreen != nullptr);
+    ctx->setContextProperty("externalMediaScreen", externalMediaScreen ? externalMediaScreen : QGuiApplication::primaryScreen());
+    ctx->setContextProperty("externalMediaScreenX", externalMediaGeometry.x());
+    ctx->setContextProperty("externalMediaScreenY", externalMediaGeometry.y());
+    ctx->setContextProperty("externalMediaScreenWidth", externalMediaGeometry.width());
+    ctx->setContextProperty("externalMediaScreenHeight", externalMediaGeometry.height());
 #ifdef Q_OS_MAC
     engine.rootContext()->setContextProperty("macScreenX",      0);
     engine.rootContext()->setContextProperty("macScreenY",      0);

@@ -12,6 +12,28 @@ Window {
     visible: true
     color: root.surfaceColor
 
+    readonly property bool hasMediaOutputScreen: !!hasExternalMediaScreen
+    property bool mediaOutputActive: false
+    property bool mediaOutputOpaque: true
+    property bool mediaOutputAcceptsFocus: false
+    property alias mediaOutputLayer: mediaOutputLayerItem
+
+    signal mediaOutputKeyPressed(var event)
+
+    function openMediaOutput(opaque, acceptsFocus) {
+        if (!root.hasMediaOutputScreen || !mediaOutputLayerItem)
+            return false
+        root.mediaOutputOpaque = opaque !== false
+        root.mediaOutputAcceptsFocus = acceptsFocus === true
+        root.mediaOutputActive = true
+        return true
+    }
+
+    function closeMediaOutput() {
+        root.mediaOutputActive = false
+        root.mediaOutputAcceptsFocus = false
+    }
+
     // --- Color Schemes ---
     readonly property var themes: ({
         "Video 1": {
@@ -150,6 +172,37 @@ Window {
                 moduleLoader.setSource(prev.source, { "navParams": prev.params, "navListState": prev.listState || {} })
             }
 
+        }
+    }
+
+    Window {
+        id: mediaOutputWindow
+        flags: Qt.FramelessWindowHint |
+               Qt.Window |
+               Qt.WindowStaysOnTopHint |
+               (root.mediaOutputAcceptsFocus ? 0 : Qt.WindowDoesNotAcceptFocus) |
+               (root.mediaOutputOpaque ? 0 : Qt.WindowTransparentForInput)
+        visible: root.mediaOutputActive && root.hasMediaOutputScreen
+        screen: externalMediaScreen
+        x: externalMediaScreenX
+        y: externalMediaScreenY
+        width: externalMediaScreenWidth
+        height: externalMediaScreenHeight
+        color: root.mediaOutputOpaque ? "black" : "transparent"
+
+        Item {
+            id: mediaOutputLayerItem
+            anchors.fill: parent
+            focus: root.mediaOutputAcceptsFocus
+
+            Keys.onPressed: function(event) {
+                root.mediaOutputKeyPressed(event)
+            }
+        }
+
+        onVisibleChanged: {
+            if (visible && root.mediaOutputAcceptsFocus)
+                mediaOutputLayerItem.forceActiveFocus()
         }
     }
 }

@@ -54,6 +54,7 @@ target_link_libraries(240mp PRIVATE
     Qt6::Svg
     OpenSSL::Crypto
     "-framework AppKit"
+    "-framework IOKit"
 )
 
 target_include_directories(240mp PRIVATE

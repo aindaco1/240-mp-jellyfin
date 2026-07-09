@@ -1,4 +1,5 @@
 import QtQuick
+import Components
 
 FocusScope {
     id: playerRoot
@@ -176,9 +177,18 @@ FocusScope {
         }
     }
 
-    Rectangle {
+    PlaybackControlPanel {
         anchors.fill: parent
-        color: "black"
+        title: itemTitle !== "" ? itemTitle : "LOCAL PLAYBACK"
+        subtitle: root.hasMediaOutputScreen ? "PLAYING ON MEDIA DISPLAY" : "PLAYING"
+        stateText: lastKnownDurationMs > 0 ? (formatTime(lastKnownPositionMs) + " / " + formatTime(lastKnownDurationMs)) : ""
+        footerText: "[ESC]:STOP [SPACE]:PAUSE [ARROWS]:SEEK"
+        controls: [
+            { key: "SPACE / ENTER", action: "Pause or resume" },
+            { key: "LEFT / RIGHT", action: "Seek" },
+            { key: "UP / DOWN", action: "Adjust playback" },
+            { key: "ESC / BACK", action: "Stop and save position" }
+        ]
     }
 
     Rectangle {

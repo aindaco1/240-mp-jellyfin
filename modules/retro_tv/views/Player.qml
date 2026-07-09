@@ -1,4 +1,5 @@
 import QtQuick
+import Components
 import "RetroTvData.js" as RetroTvData
 
 FocusScope {
@@ -30,6 +31,8 @@ FocusScope {
     property bool filterPanelVisible: false
     property bool leaving: false
     property bool suppressFinish: false
+    property bool usingExternalOutput: false
+    property bool pendingStatusOsd: false
 
     signal goBack()
 
@@ -120,6 +123,11 @@ FocusScope {
     function setStatus(text) {
         statusText = text
         statusTimer.restart()
+        pendingStatusOsd = true
+        if (loadState === "playing" && mpvController.position > 0) {
+            mpvController.showText(text, 2500)
+            pendingStatusOsd = false
+        }
     }
 
     function videoUrl(clip) {
@@ -176,6 +184,23 @@ FocusScope {
                "ESC: exit"
     }
 
+    function activateExternalOutput() {
+        usingExternalOutput = root.hasMediaOutputScreen
+    }
+
+    function showStaticOutput() {
+        staticOverlayVisible = true
+        if (usingExternalOutput)
+            root.openMediaOutput(true, false)
+        staticCanvas.requestPaint()
+    }
+
+    function hideStaticOutput() {
+        staticOverlayVisible = false
+        if (usingExternalOutput)
+            root.closeMediaOutput()
+    }
+
     function showControls() {
         mpvController.showText(controlsText(), 6000)
     }
@@ -225,8 +250,7 @@ FocusScope {
     function playCurrentSelection(preferredClipIndex, withStatic) {
         if (withStatic && staticTransitions && loadState === "playing") {
             pendingPreferredClipIndex = preferredClipIndex
-            staticOverlayVisible = true
-            staticCanvas.requestPaint()
+            showStaticOutput()
             staticOverlayHideTimer.stop()
             if (!staticTransitionTimer.running) {
                 suppressFinish = true
@@ -325,7 +349,7 @@ FocusScope {
     }
 
     function showPlaybackError(message) {
-        staticOverlayVisible = false
+        hideStaticOutput()
         staticTransitionTimer.stop()
         staticOverlayHideTimer.stop()
         suppressFinish = true
@@ -336,7 +360,7 @@ FocusScope {
 
     function exitPlayback() {
         leaving = true
-        staticOverlayVisible = false
+        hideStaticOutput()
         staticTransitionTimer.stop()
         staticOverlayHideTimer.stop()
         suppressFinish = true
@@ -359,7 +383,7 @@ FocusScope {
         filterCursor = 0
         filterMessage = ""
         filterPanelVisible = true
-        staticOverlayVisible = false
+        hideStaticOutput()
         staticTransitionTimer.stop()
         staticOverlayHideTimer.stop()
         suppressFinish = true
@@ -555,8 +579,14 @@ FocusScope {
         target: mpvController
 
         function onPositionChanged(ms) {
-            if (ms > 0)
-                staticOverlayVisible = false
+            if (ms > 0) {
+                if (staticOverlayVisible)
+                    hideStaticOutput()
+                if (pendingStatusOsd && statusText !== "") {
+                    mpvController.showText(statusText, 2500)
+                    pendingStatusOsd = false
+                }
+            }
             if (ms > 3000)
                 failedSkips = 0
         }
@@ -587,7 +617,10 @@ FocusScope {
         id: statusTimer
         interval: 3500
         repeat: false
-        onTriggered: statusText = ""
+        onTriggered: {
+            statusText = ""
+            pendingStatusOsd = false
+        }
     }
 
     Timer {
@@ -605,8 +638,8 @@ FocusScope {
         onTriggered: {
             var preferredClipIndex = pendingPreferredClipIndex
             pendingPreferredClipIndex = undefined
+            hideStaticOutput()
             startCurrentPlayback(preferredClipIndex)
-            staticOverlayHideTimer.restart()
             playerRoot.forceActiveFocus()
         }
     }
@@ -615,12 +648,24 @@ FocusScope {
         id: staticOverlayHideTimer
         interval: 2500
         repeat: false
-        onTriggered: staticOverlayVisible = false
+        onTriggered: hideStaticOutput()
     }
 
-    Rectangle {
+    PlaybackControlPanel {
         anchors.fill: parent
-        color: "black"
+        visible: !filterPanelVisible && loadState === "playing"
+        title: feed.decadeName ? ("RETRO " + feed.decadeName) : "RETRO PLAYBACK"
+        subtitle: root.hasMediaOutputScreen ? "PLAYING ON MEDIA DISPLAY" : "PLAYING"
+        stateText: statusText !== "" ? statusText : "CHANNEL " + (currentIndex + 1)
+        footerText: "[ESC]:EXIT [F]:FILTERS [C]:CONTROLS"
+        controls: [
+            { key: "UP / DOWN", action: "Channel surf" },
+            { key: "LEFT / RIGHT", action: "Skip clip" },
+            { key: "SPACE / ENTER", action: "Pause or resume" },
+            { key: "0-9", action: "Jump within decade" },
+            { key: "F / V", action: "Filter content" },
+            { key: "N / G / B / O", action: "Toggle effects" }
+        ]
     }
 
     Rectangle {
@@ -761,71 +806,84 @@ FocusScope {
         }
     }
 
-    Rectangle {
-        visible: statusText !== "" && !filterPanelVisible && loadState === "playing"
-        color: "#cc000000"
-        anchors.left: parent.left
-        anchors.bottom: parent.bottom
-        anchors.leftMargin: root.sw * 0.025
-        anchors.bottomMargin: root.sh * 0.025
-        width: statusLabel.implicitWidth + root.sw * 0.025
-        height: statusLabel.implicitHeight + root.sh * 0.016
-
-        Text {
-            id: statusLabel
-            anchors.centerIn: parent
-            text: statusText
-            color: "white"
-            font.family: root.globalFont
-            font.capitalization: Font.AllUppercase
-            font.pixelSize: root.sh * 0.0275
-        }
-    }
-
     Item {
-        anchors.fill: parent
+        id: outputSurface
+        parent: playerRoot.usingExternalOutput ? root.mediaOutputLayer : playerRoot
+        width: parent ? parent.width : playerRoot.width
+        height: parent ? parent.height : playerRoot.height
         z: 1000
-        visible: staticOverlayVisible && staticTransitions
 
         Rectangle {
-            anchors.fill: parent
-            color: "black"
+            visible: statusText !== "" && !filterPanelVisible && loadState === "playing"
+            color: "#cc000000"
+            anchors.left: parent.left
+            anchors.bottom: parent.bottom
+            anchors.leftMargin: outputSurface.width * 0.025
+            anchors.bottomMargin: outputSurface.height * 0.025
+            width: Math.min(statusLabel.implicitWidth + outputSurface.width * 0.025,
+                            outputSurface.width * 0.9)
+            height: statusLabel.implicitHeight + outputSurface.height * 0.016
+
+            Text {
+                id: statusLabel
+                anchors.centerIn: parent
+                width: parent.width - outputSurface.width * 0.018
+                text: statusText
+                color: "white"
+                font.family: root.globalFont
+                font.capitalization: Font.AllUppercase
+                elide: Text.ElideRight
+                font.pixelSize: outputSurface.height * 0.0275
+            }
         }
 
-        Canvas {
-            id: staticCanvas
+        Item {
             anchors.fill: parent
-            opacity: 0.95
-            onPaint: {
-                var ctx = getContext("2d")
-                var block = Math.max(3, Math.floor(width / 180))
+            z: 1000
+            visible: staticOverlayVisible && staticTransitions
 
-                ctx.fillStyle = "black"
-                ctx.fillRect(0, 0, width, height)
+            Rectangle {
+                anchors.fill: parent
+                color: "black"
+            }
 
-                for (var y = 0; y < height; y += block) {
-                    for (var x = 0; x < width; x += block) {
-                        var level = Math.floor(60 + Math.random() * 175)
-                        ctx.fillStyle = "rgb(" + level + "," + level + "," + level + ")"
-                        ctx.fillRect(x, y, block, block)
+            Canvas {
+                id: staticCanvas
+                anchors.fill: parent
+                opacity: 0.95
+                onPaint: {
+                    var ctx = getContext("2d")
+                    var block = Math.max(3, Math.floor(width / 180))
+
+                    ctx.fillStyle = "black"
+                    ctx.fillRect(0, 0, width, height)
+
+                    for (var y = 0; y < height; y += block) {
+                        for (var x = 0; x < width; x += block) {
+                            var level = Math.floor(60 + Math.random() * 175)
+                            ctx.fillStyle = "rgb(" + level + "," + level + "," + level + ")"
+                            ctx.fillRect(x, y, block, block)
+                        }
                     }
-                }
 
-                for (var line = 0; line < height; line += Math.max(2, block * 2)) {
-                    ctx.fillStyle = "rgba(0,0,0,0.45)"
-                    ctx.fillRect(0, line, width, 1)
-                }
+                    for (var line = 0; line < height; line += Math.max(2, block * 2)) {
+                        ctx.fillStyle = "rgba(0,0,0,0.45)"
+                        ctx.fillRect(0, line, width, 1)
+                    }
 
-                for (var band = 0; band < 5; ++band) {
-                    var bandY = Math.random() * height
-                    ctx.fillStyle = "rgba(255,255,255,0.18)"
-                    ctx.fillRect(0, bandY, width, Math.max(1, block))
+                    for (var band = 0; band < 5; ++band) {
+                        var bandY = Math.random() * height
+                        ctx.fillStyle = "rgba(255,255,255,0.18)"
+                        ctx.fillRect(0, bandY, width, Math.max(1, block))
+                    }
                 }
             }
         }
     }
 
     Component.onCompleted: {
+        activateExternalOutput()
+
         if (!feed || !feed.origin) {
             goBack()
             return
@@ -843,5 +901,10 @@ FocusScope {
             loadState = "error"
             errorText = message
         })
+    }
+
+    Component.onDestruction: {
+        if (usingExternalOutput)
+            root.closeMediaOutput()
     }
 }

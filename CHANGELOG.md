@@ -16,6 +16,9 @@ All notable changes to 240-mp-jellyfin are documented here.
 - Renamed Ambient Mode to Loop and Local Files to Local in the UI, showed each media directory on its first view, and defaulted both directories to `~/Desktop`.
 - Ordered user-facing modules as Jellyfin, Retro, Local, Loop, then Tumblr.
 - Filtered Jellyfin episode list loading so virtual/missing episode rows do not appear in TV seasons.
+- Defaulted mpv playback to another connected macOS display when one is available.
+- Added a primary-display playback control view and second-display QML output layer for Tumblr playback and Retro overlays.
+- Added macOS idle-sleep prevention while the app is running, with a configurable battery threshold that releases the sleep assertion.
 
 ## [1.0] - 2026-06-12
 
