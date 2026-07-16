@@ -52,12 +52,20 @@ public:
     Q_INVOKABLE void sendKey(const QString &key);
     Q_INVOKABLE void setVideoFilters(const QString &filters);
     Q_INVOKABLE void showText(const QString &text, int durationMs = 4000);
+    Q_INVOKABLE void appendPlaylistItem(const QString &url);
+    Q_INVOKABLE void playPlaylistItem(int index);
+    Q_INVOKABLE void replacePlaylistItem(int index, const QString &url);
+    Q_INVOKABLE void removePlaylistItem(int index);
+    Q_INVOKABLE void movePlaylistItem(int fromIndex, int toIndex);
+    Q_INVOKABLE void clearPlaylistExceptCurrent();
 
 signals:
     void positionChanged(int ms);
     void durationChanged(int ms);
     void playlistPosChanged(int pos);
     void mpvKeyPressed(const QString &key);
+    void playbackItemLoaded(int playlistIndex);
+    void playbackItemEnded(int playlistIndex, const QString &reason, const QString &error);
     // Emitted when mpv exits normally (user quit or end of file).
     void playbackFinished(int finalPositionMs, int finalDurationMs);
     // Emitted when mpv exits with an error.
@@ -71,6 +79,7 @@ private slots:
 
 private:
     void sendCommand(const QJsonArray &args);
+    void sendPlaylistCommand(const QJsonArray &args);
     void doHeadlessRestore(int pos, int dur);
     bool detectHeadlessMode() const;
     int  getActiveVt() const;
@@ -95,6 +104,7 @@ private:
     QString       m_inputConfPath;
     QString       m_logFilePath;
     QString       m_httpHeaderConfPath;
+    QList<QJsonArray> m_pendingPlaylistCommands;
     int           m_position     = 0;
     int           m_duration     = 0;
     int           m_playlistPos  = -1;

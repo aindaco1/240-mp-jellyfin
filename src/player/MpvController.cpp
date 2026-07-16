@@ -1,12 +1,10 @@
 #include "MpvController.h"
-#include <QCoreApplication>
+#include "tools/HelperResolver.h"
 #include <QDir>
 #include <QFile>
-#include <QFileInfo>
 #include <QProcessEnvironment>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QStandardPaths>
 #include <QDateTime>
 #include <QDebug>
 #include <QRegularExpression>
@@ -17,13 +15,6 @@
 #ifdef Q_OS_MACOS
 #include "macos_utils.h"
 #endif
-
-static QString executablePathIfUsable(const QString &path) {
-    const QFileInfo info(path);
-    if (info.isFile() && info.isExecutable())
-        return info.absoluteFilePath();
-    return {};
-}
 
 static QString redactedUrlForLog(const QString &value) {
     QUrl url(value);
@@ -130,6 +121,10 @@ MpvController::MpvController(const QString &appRoot, QObject *parent)
         sendCommand({"observe_property", 1, "time-pos"});
         sendCommand({"observe_property", 2, "duration"});
         sendCommand({"observe_property", 3, "playlist-pos"});
+        const QList<QJsonArray> pendingCommands = m_pendingPlaylistCommands;
+        m_pendingPlaylistCommands.clear();
+        for (const QJsonArray &command : pendingCommands)
+            sendCommand(command);
     });
     connect(m_ipc, &QLocalSocket::readyRead, this, &MpvController::onIpcReadyRead);
 
@@ -255,38 +250,13 @@ void MpvController::loadAndPlay(const QString &url, float startSeconds,
     m_position    = 0;
     m_duration    = 0;
     m_playlistPos = -1;
+    m_pendingPlaylistCommands.clear();
     writeInputConfig(inputBindings);
 
-#ifdef Q_OS_MACOS
-    // .app bundles launched via double-click get a minimal PATH that excludes
-    // Homebrew. Prefer the current yt-dlp keg ahead of stale shims so mpv's
-    // YouTube hook can extract playable streams.
-    {
-        const QStringList extraPaths = {
-            "/usr/local/bin",
-            "/opt/homebrew/bin",
-            "/usr/local/opt/yt-dlp/bin",
-            "/opt/homebrew/opt/yt-dlp/bin"
-        };
-        const QStringList currentPath = qEnvironmentVariable("PATH").split(":");
-        for (const QString &p : extraPaths) {
-            if (!currentPath.contains(p))
-                qputenv("PATH", (p + ":" + qEnvironmentVariable("PATH")).toUtf8());
-        }
-    }
-#endif
-    QString bin = executablePathIfUsable(QDir(m_appRoot).filePath("bin/mpv"));
-#ifdef Q_OS_MACOS
-    if (bin.isEmpty()) {
-        const QDir appDir(QCoreApplication::applicationDirPath());
-        bin = executablePathIfUsable(appDir.filePath("../Resources/bin/mpv"));
-    }
-#endif
-    if (bin.isEmpty())
-        bin = QStandardPaths::findExecutable("mpv");
+    const QString bin = HelperResolver::mpv(m_appRoot);
     if (bin.isEmpty()) {
         qWarning("[MpvController] mpv not found in app bundle or PATH");
-        QTimer::singleShot(0, this, [this]() { emit playbackFinished(0, 0); });
+        QTimer::singleShot(0, this, [this]() { emit playbackFailed(); });
         return;
     }
 
@@ -330,9 +300,11 @@ void MpvController::loadAndPlay(const QString &url, float startSeconds,
     // else: external sub(s) loaded, subTrack==0 → mpv auto-selects first loaded sub
 
     if (transcodeOffsetSec > 0.5f)
-        args << QString("--script-opts=transcode-offset=%1").arg(double(transcodeOffsetSec), 0, 'f', 3);
+        args << QString("--script-opts-append=transcode-offset=%1").arg(double(transcodeOffsetSec), 0, 'f', 3);
     if (oscMode == QStringLiteral("retro"))
-        args << QStringLiteral("--script-opts=retro-tv=1");
+        args << QStringLiteral("--script-opts-append=retro-tv=1");
+    if (oscMode == QStringLiteral("karaoke"))
+        args << QStringLiteral("--script-opts-append=karaoke=1");
 
     if (loop)
         args << QStringLiteral("--loop-playlist=inf");
@@ -342,6 +314,11 @@ void MpvController::loadAndPlay(const QString &url, float startSeconds,
         args << QStringLiteral("--no-audio");
     if (!videoFilters.trimmed().isEmpty())
         args << QStringLiteral("--vf=%1").arg(videoFilters.trimmed());
+
+    const bool usesYoutube = oscMode == QStringLiteral("karaoke")
+                          || oscMode == QStringLiteral("retro");
+    if (usesYoutube)
+        args << HelperResolver::youtubeMpvArguments(m_appRoot);
 
     QStringList playbackHeaders = httpHeaderFields;
     if (!plexToken.isEmpty()) {
@@ -366,6 +343,17 @@ void MpvController::loadAndPlay(const QString &url, float startSeconds,
     connect(m_process,
             QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
             this, &MpvController::onProcessFinished);
+    connect(m_process, &QProcess::errorOccurred, this, [this](QProcess::ProcessError error) {
+        if (error != QProcess::FailedToStart)
+            return;
+        qWarning("[MpvController] mpv failed to start: %s",
+                 qPrintable(redactedTextForLog(m_process->errorString())));
+        m_connectTimer->stop();
+        m_watchdogTimer->stop();
+        QFile::remove(m_socketPath);
+        removeHttpHeaderConfig();
+        emit playbackFailed();
+    });
     connect(m_process, &QProcess::readyRead, this, [this]() {
         const QByteArray out = m_process->readAll();
         if (!out.isEmpty())
@@ -375,8 +363,7 @@ void MpvController::loadAndPlay(const QString &url, float startSeconds,
     m_headlessMode = detectHeadlessMode();
     if (m_headlessMode) {
         {
-            QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
-            env.insert("APP_ROOT", m_appRoot);
+            QProcessEnvironment env = HelperResolver::processEnvironment(m_appRoot);
 #ifdef Q_OS_LINUX
             const QString fcConf = writeFontconfigOverride(m_appRoot + "/assets/fonts");
             if (!fcConf.isEmpty())
@@ -439,8 +426,7 @@ void MpvController::loadAndPlay(const QString &url, float startSeconds,
         // stalls waiting for wl_surface frame-done callbacks from labwc.
         // --no-native-fs avoids macOS Space-transition delays that can
         // prevent early OSD renders from appearing.
-        QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
-        env.insert("APP_ROOT", m_appRoot);
+        QProcessEnvironment env = HelperResolver::processEnvironment(m_appRoot);
         env.remove("WAYLAND_DISPLAY");
 #ifdef Q_OS_LINUX
         const QString fcConf = writeFontconfigOverride(m_appRoot + "/assets/fonts");
@@ -488,6 +474,53 @@ void MpvController::showText(const QString &text, int durationMs) {
     sendCommand({"show-text", text, durationMs});
 }
 
+void MpvController::appendPlaylistItem(const QString &url) {
+    if (!url.trimmed().isEmpty())
+        sendPlaylistCommand({"loadfile", url, "append"});
+}
+
+void MpvController::playPlaylistItem(int index) {
+    if (index >= 0)
+        sendPlaylistCommand({"playlist-play-index", index});
+}
+
+void MpvController::replacePlaylistItem(int index, const QString &url) {
+    if (index < 0 || url.trimmed().isEmpty())
+        return;
+
+    // Prefetched media only replaces an upcoming item. Insert first so a
+    // failed insert leaves the original remote entry intact, then remove the
+    // displaced entry now one slot later.
+    sendPlaylistCommand({"loadfile", url, "insert-at", index});
+    sendPlaylistCommand({"playlist-remove", index + 1});
+}
+
+void MpvController::removePlaylistItem(int index) {
+    if (index >= 0)
+        sendPlaylistCommand({"playlist-remove", index});
+}
+
+void MpvController::movePlaylistItem(int fromIndex, int toIndex) {
+    if (fromIndex < 0 || toIndex < 0 || fromIndex == toIndex)
+        return;
+
+    // mpv's playlist-move target is the entry to insert before, so moving an
+    // item downward by one is most reliably expressed by moving its next
+    // neighbor upward. Repeating adjacent moves gives exact QList::move
+    // semantics without relying on an out-of-range append index.
+    if (fromIndex < toIndex) {
+        for (int index = fromIndex; index < toIndex; ++index)
+            sendPlaylistCommand({"playlist-move", index + 1, index});
+    } else {
+        for (int index = fromIndex; index > toIndex; --index)
+            sendPlaylistCommand({"playlist-move", index, index - 1});
+    }
+}
+
+void MpvController::clearPlaylistExceptCurrent() {
+    sendPlaylistCommand({"playlist-clear"});
+}
+
 void MpvController::tryConnectIpc() {
     if (m_ipc->state() == QLocalSocket::ConnectedState ||
         m_ipc->state() == QLocalSocket::ConnectingState)
@@ -509,6 +542,18 @@ void MpvController::onIpcReadyRead() {
             const QJsonArray args = obj["args"].toArray();
             if (args.size() >= 2 && args.at(0).toString() == QStringLiteral("240mp-key"))
                 emit mpvKeyPressed(args.at(1).toString());
+            continue;
+        }
+
+        if (event == QStringLiteral("end-file")) {
+            emit playbackItemEnded(m_playlistPos,
+                                   obj.value("reason").toString(),
+                                   obj.value("file_error").toString());
+            continue;
+        }
+
+        if (event == QStringLiteral("file-loaded")) {
+            emit playbackItemLoaded(m_playlistPos);
             continue;
         }
 
@@ -601,6 +646,14 @@ void MpvController::sendCommand(const QJsonArray &args) {
     QJsonObject cmd;
     cmd["command"] = args;
     m_ipc->write(QJsonDocument(cmd).toJson(QJsonDocument::Compact) + "\n");
+}
+
+void MpvController::sendPlaylistCommand(const QJsonArray &args) {
+    if (m_ipc->state() == QLocalSocket::ConnectedState) {
+        sendCommand(args);
+    } else {
+        m_pendingPlaylistCommands.append(args);
+    }
 }
 
 bool MpvController::detectHeadlessMode() const {

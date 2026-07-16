@@ -1,0 +1,21 @@
+{
+  "id": "com.240mp.karaoke",
+  "name": "Karaoke",
+  "display_order": 20,
+  "icon": "assets/images/logo.svg",
+  "entry_point_qml": "views/Root.qml",
+  "settings": [
+    {
+      "key": "enabled",
+      "label": "ENABLED",
+      "type": "toggle",
+      "default": "ON"
+    },
+    {
+      "key": "refresh_catalog",
+      "label": "REFRESH CATALOG",
+      "type": "action",
+      "action_slot": "refreshCatalog"
+    }
+  ]
+}

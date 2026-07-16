@@ -24,7 +24,9 @@ brew install qt
 brew install mpv ffmpeg
 ```
 
-Note: 240-mp-jellyfin uses mpv as an external subprocess for video playback and `ffprobe` for local audio/subtitle track probing. Development runs can use Homebrew tools from your `PATH`. Packaged macOS apps embed `mpv`, `ffprobe`, and their non-system dynamic libraries during `cmake --install` when both tools are available on the build machine, so end users do not need Homebrew runtime installs for playback or track probing.
+240-mp-jellyfin uses mpv as an external subprocess for video playback, `ffprobe` for local audio/subtitle track probing, and `ffmpeg` to merge high-quality Karaoke prefetches. Development runs can use Homebrew copies from `PATH`. Packaged apps embed all three helpers and their non-system dynamic libraries during `cmake --install`.
+
+CMake also downloads pinned Apple Silicon-compatible Deno and standalone universal `yt-dlp` release assets, verifies their SHA-256 checksums, and embeds them with their license files. These power Karaoke catalog extraction and mpv's YouTube handoff without relying on a user's Python, JavaScript runtime, yt-dlp, or Homebrew installation. Maintainers can test a local helper build with `-DYT_DLP_EXECUTABLE_OVERRIDE=/path/to/yt-dlp` or `-DDENO_EXECUTABLE_OVERRIDE=/path/to/deno`; release builds should use the pinned defaults.
 
 Jellyfin playback sends authentication headers to mpv through a temporary owner-only mpv include file. Tokens are not placed in normal Jellyfin stream URLs, and the app's playback launch log redacts known token query parameters.
 
@@ -51,7 +53,13 @@ cmake --build build
 
 ### Run
 
-You can either double-click `build/240-mp-jellyfin.app` in Finder, or run from the terminal:
+The repository Run action and its terminal equivalent build first, stop any prior development instance, and open the app:
+
+```bash
+./script/build_and_run.sh
+```
+
+You can also double-click `build/240-mp-jellyfin.app` in Finder, or run the executable directly:
 
 ```bash
 APP_ROOT=$(pwd) ./build/240-mp-jellyfin.app/Contents/MacOS/240-mp-jellyfin
@@ -65,6 +73,9 @@ On macOS all user configuration is stored at:
 ~/Library/Application Support/240-mp-jellyfin/
   config.json          ← app and module settings
   jellyfin_auth.json   ← Jellyfin auth
+  karaoke_catalog.json ← cached public sixteen-source Karaoke catalog (refreshed after 24 hours)
+  karaoke_queue.json   ← persistent Karaoke queue
+  karaoke_queue.m3u8   ← generated canonical playback URLs
 ```
 
 This directory is created automatically on first run. It is separate from the app itself, so deleting or rebuilding the app will not wipe your settings.
@@ -126,7 +137,7 @@ The intended workflow is a macOS Apple Silicon build:
 |---|---|---|
 | `build-macos-arm64` | `macos-26` (arm64) | `240-mp-jellyfin-<tag>-macOS-arm64.dmg` |
 
-macOS jobs: installs Qt via the Qt CDN, configures CMake for `arm64`, builds, embeds `mpv` and `ffprobe`, runs `macdeployqt` to embed Qt frameworks, codesigns, and packages as `.dmg`.
+macOS jobs: installs Qt via the Qt CDN, configures CMake for `arm64`, downloads and verifies pinned yt-dlp/Deno, builds and tests, embeds all helpers, runs `macdeployqt`, prunes QML plugins not used by the app, verifies every Mach-O file under a stripped environment (including one live extraction from each Karaoke source), rejects `.DS_Store`, broken symlinks, and external load paths, Developer-ID signs both the app and `.dmg`, then notarizes and staples the disk image.
 
 ## Local Verification
 
@@ -134,8 +145,16 @@ Recommended checks before committing code changes:
 
 ```bash
 cmake --build build
-qmllint -I views modules/jellyfin/views/*.qml modules/retro_tv/views/*.qml modules/local_files/views/*.qml modules/ambient_mode/views/*.qml modules/tumblr_screensaver/views/*.qml
+ctest --test-dir build --output-on-failure
+qmllint -I views Main.qml views/*.qml views/Components/*.qml modules/jellyfin/views/*.qml modules/karaoke/views/*.qml modules/retro_tv/views/*.qml modules/local_files/views/*.qml modules/ambient_mode/views/*.qml modules/tumblr_screensaver/views/*.qml
 git diff --check
+```
+
+The Karaoke backend suite skips its network integration case by default. Run it explicitly when changing the channel extractor or pinned helpers:
+
+```bash
+KARAOKE_LIVE_TEST=1 ./build/karaoke_backend_tests refreshesLiveCatalog
+KARAOKE_LIVE_TEST=1 ./build/karaoke_backend_tests prefetchesLivePlaybackMedia
 ```
 
 For packaging changes, also run a local install into a temporary prefix and confirm bundled helpers launch:
@@ -143,8 +162,20 @@ For packaging changes, also run a local install into a temporary prefix and conf
 ```bash
 cmake --install build --prefix /tmp/240mp-jellyfin-install-test
 /tmp/240mp-jellyfin-install-test/240-mp-jellyfin.app/Contents/Resources/bin/mpv --version
+/tmp/240mp-jellyfin-install-test/240-mp-jellyfin.app/Contents/Resources/bin/ffmpeg -version
 /tmp/240mp-jellyfin-install-test/240-mp-jellyfin.app/Contents/Resources/bin/ffprobe -version
+/tmp/240mp-jellyfin-install-test/240-mp-jellyfin.app/Contents/Resources/bin/yt-dlp --version
+/tmp/240mp-jellyfin-install-test/240-mp-jellyfin.app/Contents/Resources/bin/deno --version
 ```
+
+After running `macdeployqt`, use `scripts/macos_prune_qt_deployment.zsh` to retain only QML plugins found by `qmlimportscanner`, then run `scripts/macos_verify_bundle.zsh` before signing. The release workflow is the canonical invocation for both scripts.
+
+When applying hardened-runtime signatures, preserve the bundled Deno binary's
+upstream entitlements. Sign standalone yt-dlp with
+`packaging/yt-dlp.entitlements` because its PyInstaller launcher extracts and
+loads its embedded Python runtime dynamically. Sign mpv with
+`packaging/mpv.entitlements` because its LuaJIT engine generates executable
+memory when loading playback scripts.
 
 ### Output
 

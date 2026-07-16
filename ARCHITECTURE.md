@@ -12,7 +12,7 @@ Think of 240-mp-jellyfin as a **browsing shell** that hands off to **purpose-bui
 
 - The app shell handles browsing, auth, and settings.
 - **Modules** are self-contained media integrations that the shell discovers and loads at startup.
-- When a user picks something to play, the shell hands off to **mpv**, launched as a subprocess by `MpvController`. Development builds can use mpv from `PATH`; packaged macOS builds bundle mpv and its non-system dynamic libraries. The app does not link against libmpv.
+- When a user picks something to play, the shell hands off to **mpv**, launched as a subprocess by `MpvController`. Development builds can use mpv from `PATH`; packaged macOS builds bundle mpv and its non-system dynamic libraries. YouTube extraction uses pinned bundled yt-dlp and Deno helpers. The app does not link against libmpv.
 
 The guiding idea: **browse structured content, then hand off to the right tool for the job** rather than bundling everything into one binary.
 
@@ -30,6 +30,8 @@ The guiding idea: **browse structured content, then hand off to the right tool f
         PlexBackend.h/.cpp          # hidden reference backend retained until Jellyfin parity
       jellyfin/
         JellyfinBackend.h/.cpp      # Jellyfin auth, browsing, stream URL building
+      karaoke/
+        KaraokeBackend.h/.cpp       # multi-source catalog cache and persistent queue
       ...
     player/
       MpvController.h/.cpp          # mpv subprocess controller: QProcess launch + IPC socket
@@ -40,6 +42,7 @@ The guiding idea: **browse structured content, then hand off to the right tool f
       views/
         Root.qml                    # module router (required)
         ...
+    karaoke/
     local_files/
     retro_tv/
     plex/                           # hidden from normal module discovery
@@ -53,7 +56,7 @@ The guiding idea: **browse structured content, then hand off to the right tool f
   CMakeLists.txt
 ```
 
-The user-facing modules today are `jellyfin`, `retro_tv` (displayed as Retro), `local_files` (displayed as Local), `ambient_mode` (displayed as Loop), and `tumblr_screensaver` (displayed as Tumblr). They appear in that order on the module list. `plex` remains installed and registerable, but its manifest is marked `hidden: true` while Jellyfin moves toward parity.
+The user-facing modules appear as Jellyfin, Karaoke, Retro, Tumblr, Local, and Loop. Their source IDs are `jellyfin`, `karaoke`, `retro_tv`, `tumblr_screensaver`, `local_files`, and `ambient_mode`. `plex` remains installed and registerable, but its manifest is marked `hidden: true` while Jellyfin moves toward parity.
 
 ## Anatomy of a Module
 
@@ -181,11 +184,15 @@ The current mpv implementation is a good reference implementation of the "browse
 
 ### How the hand-off works
 
-1. **Launch** — `loadAndPlay(url, startSeconds, audioTrack, subTrack, ...)` starts mpv as a `QProcess`. Playback parameters are passed as mpv command-line flags: `--start=<sec>` (resume offset), `--playlist-start=<n>`, `--loop-playlist=inf`, selected audio/subtitle tracks, sidecar subtitle files, optional video filters, optional input bindings, and so on. On macOS, if another display is connected, mpv is launched fullscreen on the first non-main screen by default. `Main.qml` also owns a second-screen QML output layer for pure-QML media and mpv-adjacent overlays, while the primary window stays available as a playback control surface. mpv is resolved from the app bundle first, then `PATH`; the app never links libmpv.
+1. **Launch** — `loadAndPlay(url, startSeconds, audioTrack, subTrack, ...)` starts mpv as a `QProcess`. Playback parameters are passed as mpv command-line flags: `--start=<sec>` (resume offset), `--playlist-start=<n>`, `--loop-playlist=inf`, selected audio/subtitle tracks, sidecar subtitle files, optional video filters, optional input bindings, and so on. On macOS, if another display is connected, mpv is launched fullscreen on the first non-main screen by default. `Main.qml` also owns a second-screen QML output layer for pure-QML media and mpv-adjacent overlays, while the primary window stays available as a playback control surface. `HelperResolver` resolves packaged helpers first, then development overrides and `PATH`, and builds a per-process `PATH`; the app never mutates its global environment or links libmpv.
 2. **Authenticated HTTP playback** — Jellyfin headers are written to a temporary owner-only mpv include file and passed with `--include=<file>`, so tokens are not exposed as normal command-line header arguments. Jellyfin stream URLs avoid `api_key` query tokens.
-3. **Control channel** — mpv is started with `--input-ipc-server=<socket>` (a Unix domain socket at `/tmp/240-mp-jellyfin-mpv.sock`). `MpvController` connects to it with a `QLocalSocket` and sends JSON commands via `sendCommand(QJsonArray)`. `seekTo()`, `sendKey()`, `setVideoFilters()`, and `showText()` go over this channel. mpv client messages using the `240mp-key` prefix are bridged back to QML through `mpvKeyPressed`.
+3. **Control channel** — mpv is started with `--input-ipc-server=<socket>` (a Unix domain socket at `/tmp/240-mp-jellyfin-mpv.sock`). `MpvController` connects to it with a `QLocalSocket` and sends JSON commands via `sendCommand(QJsonArray)`. Seeking, key input, video filters, messages, and playlist append/remove/move/clear/play/replace operations go over this channel. mpv client messages using the `240mp-key` prefix are bridged back to QML through `mpvKeyPressed`; `file-loaded` is surfaced separately so overlays can reveal only after the replacement video is ready.
 4. **State back to QML** — `MpvController` issues `observe_property` for `time-pos`, `duration`, and `playlist-pos`, and re-publishes them as `Q_PROPERTY`s + the `positionChanged` / `durationChanged` / `playlistPosChanged` signals. A watchdog timer logs a warning if no `time-pos` event arrives for about 30 s.
-5. **Exit** — when mpv quits, `MpvController` emits **`playbackFinished(finalPos, finalDur)`** on a normal exit, or **`playbackFailed()`** on a non-zero exit. Local records resume position from those signals; Jellyfin currently uses them only to return from playback or show failure.
+5. **Exit and item outcome** — mpv `end-file` events are surfaced as `playbackItemEnded(playlistIndex, reason, error)`. When mpv quits, `MpvController` emits **`playbackFinished(finalPos, finalDur)`** on a normal exit, or **`playbackFailed()`** on a non-zero exit. Karaoke uses item outcomes to remove completed entries and retain failed entries; Local records resume position from process signals, while Jellyfin currently uses them only to return or show failure.
+
+### Bundled helper policy
+
+`cmake/BundledHelpers.cmake` is the single source of truth for yt-dlp and Deno versions, release URLs, and SHA-256 hashes. Configure downloads are cached under `build/bundled-helpers/`; install rules copy the executables and license files to `Contents/Resources/bin` and `Contents/Resources/licenses`. YouTube playback gives mpv's ytdl hook the resolved yt-dlp path explicitly, supplies the resolved Deno runtime as an app-owned raw extractor option, and ignores user helper configuration. Packaged apps also include `ffmpeg`, used by yt-dlp to merge Karaoke's prefetched 720p video and audio. This keeps packaged extraction and prefetch independent of the launch environment and stale system installs. Release CI runs the helpers with a stripped `PATH`, performs a live one-item extraction from each Karaoke source, checks executable load paths, then signs every bundled helper.
 
 ### Custom OSC (Lua)
 
@@ -231,7 +238,22 @@ The Retro module lives entirely in `modules/retro_tv/`; it has no C++ backend.
 - `RetroTvData.js` fetches the feed homepage, resolves the hashed JavaScript bundle, extracts the site's YouTube ID decode map, then parses `d.json` into filterable channel groups.
 - `Player.qml` hands decoded YouTube watch URLs to mpv through `MpvController`, using custom input bindings for channel surfing, clip skipping, filtering, special effects, and exit behavior.
 - CRT effects are mpv video filters where possible; the static transition is a QML fullscreen noise overlay shown during channel and clip handoff.
-- Because feeds are remote and YouTube-backed, local development playback depends on a working `mpv` plus `yt-dlp` on `PATH` or in the packaged helper bundle.
+- Because feeds are remote and YouTube-backed, playback uses the same resolved mpv and pinned yt-dlp/Deno helper path as Karaoke.
+
+## Karaoke Module
+
+Karaoke lives in `modules/karaoke/` and `src/modules/karaoke/`.
+
+- `KaraokeBackend` runs the pinned yt-dlp asynchronously against fixed Funbox, KaraokeNerds, JLo.Instru, Offbeat Karaoke, Peareoke, Karaoke Office, CCKaraokeX, Nicky Dee Karaoke, Karaoke Balka, Pants Karaoke, Karaokearr, ObsKure, 1Music Karaoke, Janet Email Karaoke, Couch Potato Karaoke, and Lemmy Caution Karaoke channel IDs. It reads newline-delimited JSON incrementally, validates 11-character video IDs and source identity, deduplicates IDs, and emits cold-load batches of 64 songs.
+- Title cleanup uses anchored, case-insensitive source rules: trailing `(Funbox Karaoke, YYYY[/YYYY...])` becomes `(YYYY[/YYYY...])`; generic and provider-specific Karaoke/Instrumental branding is removed while meaningful qualifiers remain, including Karaoke Office's ordinary suffix and a centralized alias map for verified malformed or inverted records, Nicky Dee's parenthetical and Balka's bullet-delimited markers; Pants quoted performance/byline, parody, live-cover, and attributed cover-version sentences are reordered to artist-first through shared grammars and a small verified attribution map, equivalent animal-sound Eye of the Tiger uploads share one canonical title, and the single unattributed `25 Minutes or Less` parody is excluded at catalog ingestion and cache loading without mutating persistent queues; JLo.Instru separators are normalized before its branded song-first titles—including Instrumental Version/Karaoke Lyrics forms—are reordered to artist-first; every Offbeat key-signature form is removed while remix, cover, and year segments survive; CCKaraokeX bullets become ` - ` and its split CC/Karaoke Version/UVR tags are stripped; ObsKure descriptor chains include Best Karaoke Version forms; legacy 1Music `MusicKaraoke`, XRINA, vocal-removal, training, instrumental-version, and Karaoke labels are removed before shared all-uppercase title casing, separators are repaired or recovered from a centralized list of known undelimited artist prefixes, edition-first records are reordered to `Artist - Song (Edition)`, and redundant `2Pac - Tupac Shakur` aliases collapse; Lemmy post-Karaoke performance labels and repeated-artist live/year metadata become compact parentheticals; Janet em dashes become ASCII separators; and Couch Potato's dash-delimited Karaoke marker is removed. Shared cleanup converts square brackets to parentheses, normalizes quoted `"Weird Al" Yankovic`, repairs the known `Bela Lugosis Dead` possessive, removes a leading context tag when a separate artist/title structure follows, removes redundant leading or trailing `Version` from parenthetical edition descriptors, moves year-version metadata after named edits, shortens 7 Inch Version to `(7")`, and normalizes artist credits to `Ft.`, including relocating credits supplied after the song title. Raw, display, and source identities are retained through the catalog and persistent queue, and cached display titles are always regenerated from those fields on load.
+- Catalog reconciliation derives one comparison key from the shared cleaned-title path. It folds case and accents, normalizes punctuation, apostrophes, conjunctions, and English articles, removes trailing Funbox years, then applies the registry ranking Funbox → KaraokeNerds → JLo.Instru → Offbeat Karaoke → Peareoke → Karaoke Office → CCKaraokeX → Nicky Dee Karaoke → Karaoke Balka → Pants Karaoke → Karaokearr → ObsKure → 1Music Karaoke → Janet Email Karaoke → Couch Potato Karaoke → Lemmy Caution Karaoke. The first upload from the winning source is retained, collapsing duplicate uploads within a channel while preserving distinct meaningful annotations.
+- `karaoke_catalog.json` is an atomic, schema-versioned multi-source catalog cache. Schema 1 Funbox-only, schema 2 Funbox/ObsKure, schema 3 four-source, schema 4 five-source, schema 5 six-source, schema 6 nine-source, schema 7 eleven-source, schema 8 thirteen-source, and schema 9 fifteen-source caches remain immediately readable and force a background migration to the current sixteen-source schema 10. After the first full inventory, later launches show saved results immediately. Missing or 24-hour-stale data refreshes automatically in the background, reconciling additions, removals, and changed titles before atomically swapping the catalog. Each source must independently pass truncation checks, so one failed channel cannot erase the others; Couch Potato uses a lower floor because its complete channel is smaller than 100 videos. Watch URLs are regenerated from validated IDs rather than reused as expiring media links. A Settings action invokes the same refresh manually. Stale data stays visible if refresh fails.
+- `karaoke_queue.json` is one atomic persistent queue. Entry UUIDs allow duplicate videos. Completed entries are removed; failures remain marked. `karaoke_queue.m3u8` is regenerated with validated canonical watch URLs before playback.
+- `Items.qml` owns the shared live-search and queue editor used both before and during playback. Search normalization and article-insensitive alphabetical sort keys are shared through `TextSearch.qml`; marquee rows and confirmation UI are shared components.
+- `Player.qml` keeps that browser active on the primary display while mpv plays on the external display. Backend mutations are mirrored to mpv's live playlist over IPC, protecting the current and past entries while allowing upcoming append, reorder, remove, and clear operations.
+- Enter on a selected queue row uses `playlist-play-index`, so a host can jump to any retained item without rebuilding the playlist. The queue remains editable after the jump.
+- Once the current file is loaded, `KaraokeBackend` asynchronously prepares the next entry with the pinned yt-dlp/Deno pair and bundled `ffmpeg`. The completed, validated owner-only media file is stored under `karaoke_playback_cache`, limited to eight unprotected files or 1 GiB, and inserted into the matching upcoming mpv slot before the remote URL is removed. Cache files referenced by the persisted queue are protected from eviction.
+- The shared `PlaybackTransitionOverlay` presents randomized fade, slide, and falling-block handoffs on the transparent external QML layer. Its easing functions live in the `TransitionMath` singleton and are also used by Tumblr's block transition, keeping the animation math centralized.
 
 ## Tumblr Screensaver Module
 
@@ -444,6 +466,7 @@ User configuration is stored in `config.json` in the app's data directory:
   },
   "modules": {
     "com.240mp.jellyfin": { "enabled": true, "resume_playback": "ask", "video_quality": "direct" },
+    "com.240mp.karaoke": { "enabled": true },
     "com.240mp.local_files": { "enabled": true, "media_directory": "~/Desktop" },
     "com.240mp.ambient_mode": { "enabled": false, "media_directory": "~/Desktop" },
     "com.240mp.tumblr_screensaver": { "enabled": true, "tumblr_url": "https://pixelskylines.tumblr.com/" }

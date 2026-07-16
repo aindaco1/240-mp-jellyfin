@@ -1,9 +1,9 @@
 #include "AmbientModeBackend.h"
+#include "tools/HelperResolver.h"
 #include <QDir>
 #include <QFile>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QStandardPaths>
 #include <QDebug>
 
 static const QStringList kVideoExts = {
@@ -29,8 +29,10 @@ static QString expandedMediaRoot(const QString &path)
     return path;
 }
 
-AmbientModeBackend::AmbientModeBackend(const QString &dataRoot, QObject *parent)
-    : QObject(parent), m_dataRoot(dataRoot), m_mediaRoot(defaultMediaRoot())
+AmbientModeBackend::AmbientModeBackend(const QString &appRoot, const QString &dataRoot,
+                                       QObject *parent)
+    : QObject(parent), m_appRoot(appRoot), m_dataRoot(dataRoot),
+      m_mediaRoot(defaultMediaRoot())
 {
     // Resolve the configured media directory (falls back to ~/Desktop).
     QFile f(m_dataRoot + "/config.json");
@@ -91,20 +93,9 @@ void AmbientModeBackend::startAudio(const QString &path)
 {
     stopAudio();
 
-#ifdef Q_OS_MACOS
-    {
-        const QStringList extraPaths = { "/opt/homebrew/bin", "/usr/local/bin" };
-        const QStringList current = qEnvironmentVariable("PATH").split(":");
-        for (const QString &p : extraPaths) {
-            if (!current.contains(p))
-                qputenv("PATH", (p + ":" + qEnvironmentVariable("PATH")).toUtf8());
-        }
-    }
-#endif
-
-    const QString bin = QStandardPaths::findExecutable("mpv");
+    const QString bin = HelperResolver::mpv(m_appRoot);
     if (bin.isEmpty()) {
-        qWarning("[AmbientMode] mpv not found in PATH — audio will not play");
+        qWarning("[AmbientMode] mpv not found in app bundle or PATH — audio will not play");
         return;
     }
 
@@ -116,6 +107,7 @@ void AmbientModeBackend::startAudio(const QString &path)
          << QStringLiteral("--really-quiet");
 
     m_audioProcess = new QProcess(this);
+    m_audioProcess->setProcessEnvironment(HelperResolver::processEnvironment(m_appRoot));
     m_audioProcess->start(bin, args);
     qDebug("[AmbientMode] audio process started: %s", qPrintable(path));
 }

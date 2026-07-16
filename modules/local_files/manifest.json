@@ -1,7 +1,7 @@
 {
   "id": "com.240mp.local_files",
   "name": "Local",
-  "display_order": 30,
+  "display_order": 50,
   "icon": "assets/images/logo.svg",
   "entry_point_qml": "views/Root.qml",
   "settings": [

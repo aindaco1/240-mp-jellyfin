@@ -6,7 +6,8 @@
 class AmbientModeBackend : public QObject {
     Q_OBJECT
 public:
-    explicit AmbientModeBackend(const QString &dataRoot, QObject *parent = nullptr);
+    explicit AmbientModeBackend(const QString &appRoot, const QString &dataRoot,
+                                QObject *parent = nullptr);
     ~AmbientModeBackend() override;
 
     Q_INVOKABLE QVariantList getVideoFiles() const;
@@ -22,6 +23,7 @@ public slots:
 private:
     QVariantList scanFiles(const QStringList &extensions) const;
 
+    QString   m_appRoot;
     QString   m_dataRoot;
     QString   m_mediaRoot;
     QProcess *m_audioProcess = nullptr;

@@ -177,13 +177,15 @@ Window {
 
     Window {
         id: mediaOutputWindow
-        flags: Qt.FramelessWindowHint |
-               Qt.Window |
-               Qt.WindowStaysOnTopHint |
-               (root.mediaOutputAcceptsFocus ? 0 : Qt.WindowDoesNotAcceptFocus) |
-               (root.mediaOutputOpaque ? 0 : Qt.WindowTransparentForInput)
+        flags: {
+            var windowFlags = Qt.FramelessWindowHint | Qt.Window | Qt.WindowStaysOnTopHint
+            if (!root.mediaOutputAcceptsFocus)
+                windowFlags |= Qt.WindowDoesNotAcceptFocus
+            if (!root.mediaOutputOpaque)
+                windowFlags |= Qt.WindowTransparentForInput
+            return windowFlags
+        }
         visible: root.mediaOutputActive && root.hasMediaOutputScreen
-        screen: externalMediaScreen
         x: externalMediaScreenX
         y: externalMediaScreenY
         width: externalMediaScreenWidth

@@ -1,7 +1,7 @@
 {
   "id": "com.240mp.ambient_mode",
   "name": "Loop",
-  "display_order": 40,
+  "display_order": 60,
   "icon": "assets/images/logo.svg",
   "entry_point_qml": "views/Root.qml",
   "settings": [

@@ -6,9 +6,9 @@
 
 - Apple Silicon Mac.
 - macOS current enough to run the Qt 6 app bundle.
-- Network access to your Jellyfin server for Jellyfin playback.
+- Network access to your Jellyfin server for Jellyfin playback and to YouTube for Karaoke/Retro playback.
 
-The packaged app bundles `mpv`, `ffprobe`, and their non-system dynamic libraries. End users do not need to install Homebrew, mpv, or FFmpeg to play media.
+The packaged app bundles `mpv`, `ffmpeg`, `ffprobe`, pinned standalone `yt-dlp`, pinned Deno, and required non-system dynamic libraries. End users do not need to install Homebrew, Python, mpv, FFmpeg, yt-dlp, or a JavaScript runtime.
 
 ## Install
 
@@ -25,7 +25,7 @@ The app opens as a full-screen, keyboard-first media interface.
 2. Open the DMG.
 3. Replace the existing `240-mp-jellyfin.app` in `/Applications`.
 
-Your settings and Jellyfin authentication are kept in `~/Library/Application Support/240-mp-jellyfin/`, so replacing the app bundle does not erase them.
+Your settings, Jellyfin authentication, Karaoke catalog cache, and Karaoke queue are kept in `~/Library/Application Support/240-mp-jellyfin/`, so replacing the app bundle does not erase them.
 
 ## Uninstall
 

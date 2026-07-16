@@ -6,6 +6,30 @@ All notable changes to 240-mp-jellyfin are documented here.
 
 ### Added
 
+- Added a Funbox Karaoke module with automatic 24-hour catalog refresh, progressive live search, a persistent duplicate-friendly queue, easy clear/remove/reorder controls, and a manual refresh setting.
+- Added KaraokeNerds, Peareoke, CCKaraokeX, and ObsKure as additional Karaoke catalog sources, including source-specific title cleanup and ranked cross-source deduplication (Funbox, KaraokeNerds, Peareoke, CCKaraokeX, ObsKure) that tolerates case, accents, punctuation, and missing articles.
+- Added Lemmy Caution Karaoke plus 1Music Karaoke, Janet Email Karaoke, and Couch Potato Karaoke, expanding the catalog to nine sources with source-specific cleanup and automatic legacy-cache migration.
+- Added JLo.Instru and Offbeat Karaoke, expanding the catalog to eleven sources with song/artist reordering, Karaoke Version/key-signature cleanup, meaningful qualifier retention, and nine-source-cache migration.
+- Added Pants Karaoke and Karaokearr, expanding the catalog to thirteen sources with bracketed/parenthesized Karaoke cleanup, the requested duplicate priority, and immediate schema-7 cache migration.
+- Added Nicky Dee Karaoke and Karaoke Balka, expanding the catalog to fifteen sources with parenthesized/bullet marker cleanup, the requested duplicate priority, and immediate schema-8 cache migration.
+- Added Karaoke Office, expanding the catalog to sixteen sources with ordinary, malformed featured-artist, and verified song-first title cleanup, the requested duplicate priority, and immediate schema-9 cache migration.
+- Corrected JLo.Instru's artist-first `The Smashing Pumpkins - 1979` exception without weakening its normal song-first grammar.
+- Corrected Karaoke Office's inverted `Zach Bryan - 28` record, canonicalized `Featuring`/`Feat`/`Ft` credits to artist-side `Ft.`, including misplaced title-side credits, and removed Pants' unattributed `25 Minutes or Less` parody from catalog results while preserving queue editability.
+- Normalized Pants' quoted performance/byline, parody, live-cover, and animal-sound titles to `Artist - Song (Qualifier)` across live results, caches, deduplication, and queues.
+- Added verified Pants attribution for Jo Lee's `I Wonder What's Inside Your Butthole` and recovered the missing 1Music separator in `Velvet Underground - Femme Fatale`.
+- Added article-insensitive alphabetical Karaoke search results, anchored ObsKure Best Version/duet/original-sound cleanup, same-source duplicate suppression, and shared normalization for Acoustic, 7-inch, and video-version labels.
+- Added source-aware cleanup for legacy 1Music branding, vocal-removal labels, unspaced separators, and redundant 2Pac/Tupac aliases, plus compact parenthetical formatting for Lemmy performance-version metadata.
+- Expanded shared provider cleanup for JLo.Instru's Instrumental Version/Karaoke Lyrics titles, CCKaraokeX's split CC/Karaoke Version tags, and 1Music's trailing Instrumental Version labels.
+- Compacted generic edition qualifiers such as Album Version, Live Version, Official Version, Single Version, and Original Version, corrected Bela Lugosi's possessive, and made duplicate matching tolerant of missing apostrophes and artist conjunction punctuation.
+- Generalized parenthetical edition cleanup to retain any descriptor while dropping its final Version label, removed every current Offbeat key-signature form, and reordered 1Music's edition-first titles to `Artist - Song (Edition)`.
+- Added shared `YYYY Version; Edit` and `Version Descriptor` normalization, normalized JLo.Instru separators before song/artist reversal, and recognized ObsKure's Best Karaoke Version and Instrumental Lyrics suffix forms.
+- Removed the legacy 1Music XRINA batch tag and recovered missing artist/title separators for its Smiths uploads.
+- Added Karaoke playback that keeps search and upcoming queue editing on the primary display while mpv plays on an external display, removes completed entries, and retains visibly failed entries.
+- Added readable artist/song line breaks in both Karaoke columns, Enter-to-play for any selected queue entry, 720p next-song background prefetch, and shared retro fade/slide/block handoff transitions.
+- Added anchored Funbox title cleanup so `Artist - Song (Funbox Karaoke, YEAR)` displays as `Artist - Song (YEAR)` while preserving raw metadata.
+- Added pinned, checksum-verified standalone yt-dlp and Deno helpers to configure, install, signing, licensing, and release verification; packaged YouTube playback no longer depends on system yt-dlp, Python, or a JavaScript runtime.
+- Added shared accent-insensitive QML search, marquee-row, and confirmation components used by Karaoke and Jellyfin where applicable.
+- Added Karaoke backend tests for source-specific title normalization, ranked sixteen-source catalog reconciliation, legacy/current cache loading, duplicate queue identity, persistence, reorder, failure/reset/completion, and canonical playlist generation, plus an opt-in live channel integration test.
 - Added Jellyfin TV show library browsing through series, season, and episode lists, with episodes using the existing detail and mpv playback flow.
 - Added shared Jellyfin movie/episode detail metadata and audio/subtitle selection, including clearer episode labels and default/forced/external stream flags.
 - Added a TV show metadata header on the season list with show overview, year, counts, status, rating, and genres when Jellyfin provides them.
@@ -14,11 +38,15 @@ All notable changes to 240-mp-jellyfin are documented here.
 - Added a Tumblr screensaver module that builds a shuffled, non-repeating image montage from a public Tumblr URL with retro 90s-style QML transitions.
 - Added Tumblr falling-block transitions where each falling tile is a clipped piece of the incoming image.
 - Renamed Ambient Mode to Loop and Local Files to Local in the UI, showed each media directory on its first view, and defaulted both directories to `~/Desktop`.
-- Ordered user-facing modules as Jellyfin, Retro, Local, Loop, then Tumblr.
+- Ordered user-facing modules as Jellyfin, Karaoke, Retro, Tumblr, Local, then Loop.
 - Filtered Jellyfin episode list loading so virtual/missing episode rows do not appear in TV seasons.
 - Defaulted mpv playback to another connected macOS display when one is available.
 - Added a primary-display playback control view and second-display QML output layer for Tumblr playback and Retro overlays.
 - Added macOS idle-sleep prevention while the app is running, with a configurable battery threshold that releases the sleep assertion.
+- Added release checks that run tests, exercise bundled helpers with a stripped environment and a live item from every Karaoke source, reject Homebrew load paths, and exclude `.DS_Store` files from the app bundle.
+- Fixed development YouTube playback accidentally falling through to an outdated system yt-dlp; mpv now receives the pinned helper and Deno paths explicitly and ignores conflicting helper configuration.
+- Fixed Loop's separate-audio playback to use the bundled mpv through the shared helper resolver instead of requiring a Homebrew or system mpv on `PATH`.
+- Reduced Karaoke search and queue title sizes so substantially more of each song name remains visible.
 
 ## [1.0] - 2026-06-12
 
@@ -34,7 +62,7 @@ All notable changes to 240-mp-jellyfin are documented here.
 - Added pre-play detail and track-selection flow for Local Files.
 - Added local media track probing through `ffprobe`.
 - Added sidecar subtitle discovery for Local Files.
-- Added packaged macOS helper bundling for `mpv`, `ffprobe`, and their non-system dynamic libraries.
+- Added packaged macOS helper bundling for `mpv`, `ffmpeg`, `ffprobe`, and their non-system dynamic libraries.
 - Added `AGENTS.md` as the single local development-agent guide.
 - Added `ROADMAP.md` for post-1.0 project direction.
 

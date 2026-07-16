@@ -1,5 +1,5 @@
 #include "LocalFilesBackend.h"
-#include <QCoreApplication>
+#include "tools/HelperResolver.h"
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -8,7 +8,6 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QProcess>
-#include <QStandardPaths>
 
 static const QStringList kMediaExts = {
     "mp4", "mkv", "avi", "mov", "m4v", "webm", "wmv", "flv", "f4v", "mpg", "mpeg", "vob", "m3u", "m3u8"
@@ -61,13 +60,6 @@ static QString sidecarLabel(const QFileInfo &mediaInfo, const QFileInfo &subtitl
     QString label = stem.trimmed().isEmpty() ? QString("SUBTITLE %1").arg(trackNumber) : stem.trimmed();
     label += QString(" (%1)").arg(subtitleInfo.suffix().toUpper());
     return label.toUpper();
-}
-
-static QString executablePathIfUsable(const QString &path) {
-    const QFileInfo info(path);
-    if (info.isFile() && info.isExecutable())
-        return info.absoluteFilePath();
-    return {};
 }
 
 static QString defaultMediaRoot()
@@ -162,19 +154,7 @@ QVariantMap LocalFilesBackend::probeMediaTracks(const QString &filePath) {
         return result;
     }
 
-    QString ffprobe = executablePathIfUsable(QDir(m_appRoot).filePath("bin/ffprobe"));
-#ifdef Q_OS_MACOS
-    if (ffprobe.isEmpty()) {
-        const QDir appDir(QCoreApplication::applicationDirPath());
-        ffprobe = executablePathIfUsable(appDir.filePath("../Resources/bin/ffprobe"));
-    }
-#endif
-    if (ffprobe.isEmpty())
-        ffprobe = QStandardPaths::findExecutable("ffprobe");
-#ifdef Q_OS_MACOS
-    if (ffprobe.isEmpty())
-        ffprobe = QStandardPaths::findExecutable("ffprobe", {"/opt/homebrew/bin", "/usr/local/bin"});
-#endif
+    const QString ffprobe = HelperResolver::ffprobe(m_appRoot);
     if (ffprobe.isEmpty()) {
         qWarning("[LocalFiles] ffprobe not found in app bundle or PATH; track selection unavailable for %s",
                  qPrintable(filePath));

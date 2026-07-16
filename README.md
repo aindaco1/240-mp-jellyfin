@@ -1,8 +1,8 @@
 # 240-mp-jellyfin
 
-240-mp-jellyfin is a macOS Apple Silicon fork of 240-MP: a retro VCR-style media shell built with C++ Qt 6 and QML. The fork keeps the CRT/240p-inspired interface, Local playback, Loop, Retro decade feeds, and a Tumblr image screensaver, then adds Jellyfin as the main server-backed media module.
+240-mp-jellyfin is a macOS Apple Silicon fork of 240-MP: a retro VCR-style media shell built with C++ Qt 6 and QML. The fork keeps the CRT/240p-inspired interface, Local playback, Loop, Retro decade feeds, and a Tumblr image screensaver, adds Jellyfin as the main server-backed media module, and adds a sixteen-source Karaoke queue.
 
-The app is a browsing shell, not an embedded video renderer. It launches `mpv` as a subprocess for playback and uses `ffprobe` to inspect local audio/subtitle tracks. Development builds use Homebrew tools from `PATH`; packaged macOS apps bundle `mpv`, `ffprobe`, and their non-system dynamic libraries so end users do not need Homebrew runtime dependencies.
+The app is a browsing shell, not an embedded video renderer. It launches `mpv` as a subprocess for playback and uses `ffprobe` to inspect local audio/subtitle tracks. CMake supplies pinned standalone `yt-dlp` and Deno helpers for YouTube extraction. Packaged macOS apps also bundle `ffmpeg` for high-quality Karaoke prefetch, along with all required non-system libraries, so end users do not need Homebrew or system helper installs.
 
 ## Supported Platform
 
@@ -11,6 +11,8 @@ The app is a browsing shell, not an embedded video renderer. It launches `mpv` a
 - Intel macOS, Raspberry Pi OS, and Linux packaging are out of scope for this fork.
 
 ## Current Modules
+
+The home screen order is Jellyfin, Karaoke, Retro, Tumblr, Local, then Loop.
 
 ### Jellyfin
 
@@ -27,13 +29,26 @@ The app is a browsing shell, not an embedded video renderer. It launches `mpv` a
 
 Not yet implemented: music libraries, Continue Watching hubs, playback progress reporting back to Jellyfin, watched-state updates, and transcoding fallback.
 
+### Karaoke
+
+- Automatically indexes the Funbox, KaraokeNerds, JLo.Instru, Offbeat Karaoke, Peareoke, Karaoke Office, CCKaraokeX, Nicky Dee Karaoke, Karaoke Balka, Pants Karaoke, Karaokearr, ObsKure, 1Music Karaoke, Janet Email Karaoke, Couch Potato Karaoke, and Lemmy Caution Karaoke YouTube channels and keeps a persistent 24-hour catalog cache. After the first complete sync, later launches show saved results immediately while stale catalogs reconcile additions, removals, and metadata changes in the background.
+- Live accent-insensitive title search with article-insensitive alphabetical results and progressive results during a cold catalog load.
+- Cleans `(Funbox Karaoke, YEAR)` to `(YEAR)`; removes provider-specific Karaoke/Instrumental branding, including Karaoke Office's ordinary suffix and verified malformed/inverted aliases, Nicky Dee's parenthesized and Balka's bullet-delimited markers, plain parenthesized or bracketed Karaoke markers from Karaokearr and Pants Karaoke, converts Pants' quoted performance/byline, parody, live-cover, and attributed cover-version sentences to `Artist - Song (Qualifier)`, canonicalizes its animal-sound Eye of the Tiger uploads, and excludes the one unattributed `25 Minutes or Less` parody, while leaving any previously queued copy editable; strips split CCKaraokeX forms and ObsKure Best Karaoke Version forms; removes all Offbeat key-signature forms while retaining remix/cover qualifiers; converts JLo.Instru's variably spaced `Song - Artist - Instrumental[-Version] - Karaoke[-Lyrics]` conventions to `Artist - Song` while retaining verified artist-first exceptions; strips legacy 1Music `MusicKaraoke`/vocal-removal/instrumental-version/XRINA branding, repairs its unspaced or omitted separators through a centralized artist-prefix list, reorders edition-first titles to `Artist - Song (Edition)`, and collapses redundant `2Pac - Tupac Shakur` aliases; normalizes Janet's em-dash separators and Couch Potato's dash-delimited Karaoke markers; and retains meaningful qualifiers. Lemmy's trailing performance labels and repeated-artist live/year metadata become compact parentheticals such as `(Stop Making Sense)` and `(Live) (1969)`. Shared display cleanup also normalizes square brackets, quoted `"Weird Al"`, leading context tags such as `(Sonic Adventure 2)`, removes redundant leading or trailing `Version` from parenthetical edition labels, moves `YYYY Version; Edit` into `(Edit) (YYYY)`, shortens `7 Inch Version` to `(7")`, and canonicalizes `Featuring`/`Feat`/`Ft` credits as `Ft.` on the artist side, moving misplaced title-side credits there.
+- Reconciles equivalent titles across and within sources with case-, accent-, punctuation-, apostrophe-, conjunction-, and article-insensitive matching. Duplicate preference is Funbox, KaraokeNerds, JLo.Instru, Offbeat Karaoke, Peareoke, Karaoke Office, CCKaraokeX, Nicky Dee Karaoke, Karaoke Balka, Pants Karaoke, Karaokearr, ObsKure, 1Music Karaoke, Janet Email Karaoke, Couch Potato Karaoke, then Lemmy Caution Karaoke.
+- One persistent queue with duplicate songs, keyboard reorder, remove, and clear controls.
+- Search, add, reorder, and remove remain available on the primary display while mpv plays fullscreen on an external display.
+- Artist and song render as readable two-line rows; selecting any queued song and pressing Enter jumps to it immediately.
+- While a song plays, the next queued song is downloaded and merged at up to 720p in a bounded persistent cache, then substituted into mpv's live playlist for a fast handoff.
+- Retro fade, slide, and falling-block transitions mask the handoff on the media display.
+- Completed songs leave the queue; failed songs stay visibly marked for retry or manual removal.
+- A manual catalog refresh action is available in Karaoke settings.
+
 ### Retro
 
 - MyRetroTVs-backed feeds for the 50s, 60s, 70s, 80s, 90s, and 00s.
 - Fullscreen mpv playback of decoded YouTube clips, with no TV-frame overlay.
 - Keyboard channel surfing, clip skipping, feed filtering, and decade jumping.
 - CRT-style noise, glow, black-and-white, and static transition effects.
-- Home-screen order places Retro between Jellyfin and Local.
 
 ### Local
 
@@ -96,9 +111,12 @@ User configuration is stored outside the app bundle:
 ~/Library/Application Support/240-mp-jellyfin/
   config.json
   jellyfin_auth.json
+  karaoke_catalog.json
+  karaoke_queue.json
+  karaoke_queue.m3u8
 ```
 
-`jellyfin_auth.json` stores the Jellyfin server URL, access token, user ID, username, server identity, and client device ID. Passwords are not persisted.
+`jellyfin_auth.json` stores the Jellyfin server URL, access token, user ID, username, server identity, and client device ID. Passwords are not persisted. Karaoke files contain public catalog metadata, queue state, and validated canonical YouTube watch URLs; they contain no credentials.
 
 ## Security Notes
 

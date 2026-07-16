@@ -9,6 +9,7 @@ local idle_timer = nil
 local SEEK_SECONDS = 10
 local MENU_TIMEOUT = 5
 local RETRO_TV_MODE = mp.get_opt("retro-tv") == "1"
+local KARAOKE_MODE = mp.get_opt("karaoke") == "1"
 
 -- Colors (ABGR format for ASS)
 local C_WHITE = "&HFFFFFF&"
@@ -313,7 +314,7 @@ end
 
 if RETRO_TV_MODE then
     mp.add_forced_key_binding("m", "open_menu_m", toggle_menu)
-else
+elseif not KARAOKE_MODE then
     -- Forced bindings so UP/DOWN take priority over mpv's default seek bindings
     -- on desktop (macOS/Linux with native keyboard input).
     mp.add_forced_key_binding("UP",   "open_menu_up",   toggle_menu)

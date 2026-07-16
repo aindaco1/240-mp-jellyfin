@@ -29,21 +29,7 @@ FocusScope {
     property string errorMessage: ""
 
     function normalizeText(value) {
-        var s = String(value || "").toLowerCase()
-        try {
-            if (s.normalize)
-                s = s.normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-        } catch (e) {
-        }
-
-        var map = {
-            "æ": "ae", "ǽ": "ae", "œ": "oe", "ø": "o", "ð": "d",
-            "đ": "d", "þ": "th", "ß": "ss", "ł": "l", "ı": "i"
-        }
-        var out = ""
-        for (var i = 0; i < s.length; i++)
-            out += map[s.charAt(i)] || s.charAt(i)
-        return out
+        return TextSearch.normalize(value)
     }
 
     function applyFilter(preferredIndex) {
@@ -384,53 +370,11 @@ FocusScope {
 
         Keys.onPressed: function(event) { itemListRoot.handleKey(event) }
 
-        delegate: Item {
+        delegate: SelectableMarqueeRow {
             width: itemList.width
             height: root.sh * 0.0583333
-
-            Item {
-                id: textClip
-                width: Math.min(rowText.implicitWidth, itemList.width)
-                height: parent.height
-                clip: true
-
-                Rectangle {
-                    color: root.accentColor
-                    anchors.fill: rowText
-                    visible: itemList.currentIndex === index
-                }
-
-                Text {
-                    id: rowText
-                    text: modelData.title || ""
-                    color: itemList.currentIndex === index ? root.surfaceColor : root.primaryColor
-                    font.family: root.globalFont
-                    font.capitalization: Font.AllUppercase
-                    anchors.verticalCenter: parent.verticalCenter
-                    x: 0
-                    topPadding: root.sh * 0.0041667
-                    leftPadding: root.sw * 0.009375
-                    rightPadding: root.sw * 0.009375
-                    bottomPadding: root.sh * 0.00625
-                    font.pixelSize: root.sh * 0.05
-                }
-
-                SequentialAnimation {
-                    running: (itemList.currentIndex === index) &&
-                             (rowText.implicitWidth > textClip.width)
-                    loops: Animation.Infinite
-                    onRunningChanged: if (!running) rowText.x = 0
-                    PauseAnimation { duration: 1500 }
-                    NumberAnimation {
-                        target: rowText
-                        property: "x"
-                        to: textClip.width - rowText.implicitWidth
-                        duration: Math.abs(to) * 20
-                    }
-                    PauseAnimation { duration: 2000 }
-                    PropertyAction { target: rowText; property: "x"; value: 0 }
-                }
-            }
+            label: modelData.title || ""
+            selected: itemList.currentIndex === index
         }
     }
 

@@ -1,6 +1,6 @@
 # Contributing to 240-mp-jellyfin
 
-240-mp-jellyfin is a focused macOS Apple Silicon fork of 240-MP. The goal is to keep the retro CRT-style media shell, keep Local, Loop, Retro, and Tumblr user-facing, and make Jellyfin the primary server-backed integration.
+240-mp-jellyfin is a focused macOS Apple Silicon fork of 240-MP. The goal is to keep the retro CRT-style media shell, keep Local, Loop, Retro, Tumblr, and Karaoke user-facing, and make Jellyfin the primary server-backed integration.
 
 ## Getting Started
 
@@ -20,7 +20,7 @@
 ## Current Module Direction
 
 - `jellyfin` is the primary server module.
-- `retro_tv` (Retro), `local_files` (Local), `ambient_mode` (Loop), and `tumblr_screensaver` (Tumblr) stay user-facing.
+- `karaoke` (Karaoke), `retro_tv` (Retro), `tumblr_screensaver` (Tumblr), `local_files` (Local), and `ambient_mode` (Loop) stay user-facing.
 - `plex` remains hidden as a reference until Jellyfin has enough parity to remove it.
 - Jellyfin currently targets movie libraries and direct play first.
 
@@ -44,11 +44,12 @@ A module is a folder under `modules/` with a `manifest.json` and QML views, plus
 
 ## Testing
 
-There is not yet a full automated test suite. Before opening a PR, run the checks that apply:
+Before opening a PR, run the checks that apply:
 
 ```bash
 cmake --build build
-qmllint -I views modules/jellyfin/views/*.qml modules/retro_tv/views/*.qml modules/local_files/views/*.qml modules/ambient_mode/views/*.qml modules/tumblr_screensaver/views/*.qml
+ctest --test-dir build --output-on-failure
+qmllint -I views Main.qml views/*.qml views/Components/*.qml modules/jellyfin/views/*.qml modules/karaoke/views/*.qml modules/retro_tv/views/*.qml modules/local_files/views/*.qml modules/ambient_mode/views/*.qml modules/tumblr_screensaver/views/*.qml
 git diff --check
 ```
 
@@ -58,11 +59,12 @@ Manual checks for media changes:
 - Navigate without a mouse.
 - Confirm Jellyfin login, library loading, filtering, detail loading, and playback.
 - Confirm Retro feed loading, channel surfing, filtering, static transitions, and mpv playback.
+- Confirm Karaoke automatic/manual catalog refresh, live filtering, duplicate adds, persistence, reorder/move mode, clear confirmation, external-display playback, live queue edits, completed removal, and failed retention.
 - Confirm Local browsing, track probing, sidecar subtitle discovery, and playback.
 - Confirm Loop media directory display and looping playback.
 - Confirm Tumblr URL loading, shuffled non-repeating image playback, and 90s-style transitions.
 - Confirm app settings persist after restart.
-- For packaging changes, run `cmake --install` into a temporary prefix and verify bundled `mpv` and `ffprobe` launch.
+- For packaging changes, run `cmake --install` into a temporary prefix and verify bundled `mpv`, `ffprobe`, `yt-dlp`, and Deno launch with a stripped `PATH`.
 
 ## AI Use
 

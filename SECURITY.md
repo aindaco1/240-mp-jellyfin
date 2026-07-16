@@ -25,6 +25,9 @@ Use GitHub's private vulnerability reporting for this repository when available,
 - Tokens, passwords, full auth headers, and token-bearing URLs must not be logged.
 - Jellyfin stream URLs should not include `api_key`; mpv should receive Jellyfin auth through the private temporary mpv include file created by `MpvController`.
 - Movie library caches are in memory only and are cleared on logout or new Jellyfin authentication.
+- Karaoke catalog and queue files contain only public metadata, entry UUIDs, display state, and canonical `https://www.youtube.com/watch?v=<id>` URLs. They must never accept arbitrary playlist URLs from cache or QML.
+- Karaoke helper stderr and stored failure messages must redact URLs before they are surfaced or persisted.
+- yt-dlp and Deno release assets are version-pinned and SHA-256 verified at configure time. Packaged helpers are signed with the rest of the app, and helper updates require reviewing both version and checksum changes.
 - Modules should only communicate directly with their intended media service and should only write state under `~/Library/Application Support/240-mp-jellyfin/`.
 
 ## Out Of Scope

@@ -41,6 +41,9 @@ jobs:
       - name: Build
         run: cmake --build build --parallel
 
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
       - name: Install
         run: cmake --install build
 
@@ -48,6 +51,53 @@ jobs:
         run: |
           APP="${GITHUB_WORKSPACE}/install/240-mp-jellyfin.app"
           "${QT_ROOT_DIR}/bin/macdeployqt" "$APP" -qmldir="${GITHUB_WORKSPACE}" -verbose=2
+          QML_IMPORT_SCANNER="$("${QT_ROOT_DIR}/bin/qtpaths" --query QT_INSTALL_LIBEXECS)/qmlimportscanner"
+          QML_IMPORT_PATH="$("${QT_ROOT_DIR}/bin/qtpaths" --query QT_INSTALL_QML)"
+          scripts/macos_prune_qt_deployment.zsh \
+            "$APP" "$GITHUB_WORKSPACE" "$QML_IMPORT_SCANNER" "$QML_IMPORT_PATH"
+
+      - name: Verify self-contained app bundle
+        run: |
+          APP="${GITHUB_WORKSPACE}/install/240-mp-jellyfin.app"
+          BIN="$APP/Contents/Resources/bin"
+          HELPER_HOME="$RUNNER_TEMP/helper-home"
+          mkdir -p "$HELPER_HOME"
+
+          expected_yt_dlp=$(sed -n 's/^YT_DLP_VERSION:STRING=//p' build/CMakeCache.txt)
+          expected_deno=$(sed -n 's/^DENO_VERSION:STRING=//p' build/CMakeCache.txt)
+          test "$(env -i HOME="$HELPER_HOME" PATH=/usr/bin:/bin "$BIN/yt-dlp" --version)" = "$expected_yt_dlp"
+          env -i HOME="$HELPER_HOME" PATH=/usr/bin:/bin "$BIN/deno" --version | head -n 1 | grep -F "deno $expected_deno"
+          env -i HOME="$HELPER_HOME" PATH=/usr/bin:/bin "$BIN/mpv" --version >/dev/null
+          env -i HOME="$HELPER_HOME" PATH=/usr/bin:/bin "$BIN/ffmpeg" -version >/dev/null
+          env -i HOME="$HELPER_HOME" PATH=/usr/bin:/bin "$BIN/ffprobe" -version >/dev/null
+
+          for channel_id in \
+            UCtPzvwooQ18YZ8Wq8Hka60g \
+            UCBfV298JqKc8o9CM0aANz5A \
+            UCoVB6wMm2pNGMKQTChKCiRQ \
+            UCIauImhx1GGrl7LubRCxXcg \
+            UCNU7LlZ_nKVaq9Lihj0sAHQ \
+            UCR0kPElUivbuZC7Myr7Tg1Q \
+            UCTQHT1Gj_D_Bc7P1REuMoAg \
+            UCPZsA3OSQreeZlKIo6jqUog \
+            UCvgYvYeZe-BANj-cVUd59mQ \
+            UCkXE7x417ME2iudNECaLUFA \
+            UC6m4V2RfKXs4dP3R7AfCK4g \
+            UCqspiYXbxpZpgWzzxUUbTiw \
+            UCdwO61VZMYpozDiAJ6ZI3pg \
+            UC4T6FfTdpvxUrf9-dd4kjpw \
+            UCxuk5azVGJ-aumAds7WMHmg \
+            UCg0i5aSL_2rhf4iztlLmLUQ; do
+            sample=$(env -i HOME="$HELPER_HOME" PATH=/usr/bin:/bin \
+              "$BIN/yt-dlp" --no-config --no-update --no-cache-dir --no-warnings \
+              --flat-playlist --lazy-playlist --playlist-end 1 \
+              --js-runtimes "deno:$BIN/deno" \
+              --print '%(id)s\t%(title)s' \
+              "https://www.youtube.com/channel/$channel_id/videos")
+            test -n "$sample"
+          done
+
+          scripts/macos_verify_bundle.zsh "$APP"
 
       - name: Import signing certificate
         env:
@@ -75,20 +125,51 @@ jobs:
           if [ -d "$APP/Contents/Resources/bin" ]; then
             find "$APP/Contents/Resources/bin" -type f | while read -r helper; do
               if [ -x "$helper" ]; then
-                codesign --force --options runtime --sign "$IDENTITY" "$helper"
+                case "$(basename "$helper")" in
+                  mpv) entitlement_file="packaging/mpv.entitlements" ;;
+                  yt-dlp) entitlement_file="packaging/yt-dlp.entitlements" ;;
+                  *) entitlement_file="" ;;
+                esac
+                if [ -n "$entitlement_file" ]; then
+                  codesign --force --options runtime \
+                    --entitlements "$entitlement_file" \
+                    --sign "$IDENTITY" "$helper"
+                else
+                  codesign --force --options runtime \
+                    --preserve-metadata=entitlements \
+                    --sign "$IDENTITY" "$helper"
+                fi
               fi
             done
           fi
-          codesign --force --deep --options runtime --sign "$IDENTITY" "$APP"
+          codesign --force --deep --options runtime \
+            --preserve-metadata=entitlements \
+            --sign "$IDENTITY" "$APP"
           codesign --verify --deep --strict "$APP"
+
+          SMOKE_MEDIA="$RUNNER_TEMP/mpv-signing-smoke.mkv"
+          "$APP/Contents/Resources/bin/ffmpeg" \
+            -hide_banner -loglevel error \
+            -f lavfi -i "color=c=blue:s=320x180:d=1:r=24" \
+            -f lavfi -i "sine=frequency=440:duration=1" \
+            -c:v ffv1 -c:a pcm_s16le -shortest "$SMOKE_MEDIA"
+          "$APP/Contents/Resources/bin/mpv" "$SMOKE_MEDIA" \
+            --no-config \
+            --script="$APP/Contents/Resources/scripts/mpv-osc.lua" \
+            --vo=null --ao=null --frames=1
 
       - name: Create DMG
         run: |
+          DMG="240-mp-jellyfin-${{ github.ref_name }}-macOS-arm64.dmg"
           hdiutil create \
             -volname "240-mp-jellyfin" \
             -srcfolder "${GITHUB_WORKSPACE}/install" \
             -ov -format UDZO \
-            "240-mp-jellyfin-${{ github.ref_name }}-macOS-arm64.dmg"
+            "$DMG"
+          codesign --force --timestamp \
+            --sign "Developer ID Application" \
+            "$DMG"
+          codesign --verify "$DMG"
 
       - name: Notarize and staple
         env:

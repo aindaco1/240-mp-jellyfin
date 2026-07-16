@@ -11,11 +11,14 @@ set(CMAKE_AUTOMOC ON)
 set(APP_DISPLAY_NAME "240-mp-jellyfin")
 
 include(GNUInstallDirs)
+include(CTest)
 
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Quick Qml Network Svg)
 find_package(OpenSSL REQUIRED)
 find_program(MPV_EXECUTABLE NAMES mpv)
+find_program(FFMPEG_EXECUTABLE NAMES ffmpeg)
 find_program(FFPROBE_EXECUTABLE NAMES ffprobe)
+include(cmake/BundledHelpers.cmake)
 
 if(MPV_EXECUTABLE)
     get_filename_component(MPV_EXECUTABLE_REAL "${MPV_EXECUTABLE}" REALPATH)
@@ -31,6 +34,13 @@ else()
     message(WARNING "ffprobe was not found. Packaged apps will still run, but local track probing will require ffprobe on PATH.")
 endif()
 
+if(FFMPEG_EXECUTABLE)
+    get_filename_component(FFMPEG_EXECUTABLE_REAL "${FFMPEG_EXECUTABLE}" REALPATH)
+    message(STATUS "ffmpeg found and will be bundled for Karaoke prefetch: ${FFMPEG_EXECUTABLE_REAL}")
+else()
+    message(WARNING "ffmpeg was not found. Karaoke will play normally, but high-quality background prefetch will be unavailable.")
+endif()
+
 enable_language(OBJCXX)
 
 add_executable(240mp
@@ -39,10 +49,18 @@ add_executable(240mp
     src/modules/local_files/LocalFilesBackend.cpp
     src/modules/plex/PlexBackend.cpp
     src/modules/jellyfin/JellyfinBackend.cpp
+    src/modules/karaoke/KaraokeBackend.cpp
     src/modules/ambient_mode/AmbientModeBackend.cpp
     src/modules/tumblr_screensaver/TumblrScreensaverBackend.cpp
     src/player/MpvController.cpp
+    src/tools/HelperResolver.cpp
     src/macos_utils.mm
+)
+
+target_compile_definitions(240mp PRIVATE
+    DEV_YT_DLP_EXECUTABLE="${YT_DLP_EXECUTABLE}"
+    DEV_DENO_EXECUTABLE="${DENO_EXECUTABLE}"
+    BUNDLED_YT_DLP_VERSION="${YT_DLP_VERSION}"
 )
 
 target_link_libraries(240mp PRIVATE
@@ -60,6 +78,32 @@ target_link_libraries(240mp PRIVATE
 target_include_directories(240mp PRIVATE
     src
 )
+
+if(BUILD_TESTING)
+    find_package(Qt6 REQUIRED COMPONENTS Test)
+    add_executable(karaoke_backend_tests
+        tests/KaraokeBackendTest.cpp
+        src/modules/karaoke/KaraokeBackend.cpp
+        src/tools/HelperResolver.cpp
+    )
+    target_compile_definitions(karaoke_backend_tests PRIVATE
+        DEV_YT_DLP_EXECUTABLE="${YT_DLP_EXECUTABLE}"
+        DEV_DENO_EXECUTABLE="${DENO_EXECUTABLE}"
+        BUNDLED_YT_DLP_VERSION="${YT_DLP_VERSION}"
+    )
+    target_include_directories(karaoke_backend_tests PRIVATE src)
+    target_link_libraries(karaoke_backend_tests PRIVATE Qt6::Core Qt6::Test)
+    add_test(NAME karaoke_backend COMMAND karaoke_backend_tests)
+
+    add_executable(ambient_mode_backend_tests
+        tests/AmbientModeBackendTest.cpp
+        src/modules/ambient_mode/AmbientModeBackend.cpp
+        src/tools/HelperResolver.cpp
+    )
+    target_include_directories(ambient_mode_backend_tests PRIVATE src)
+    target_link_libraries(ambient_mode_backend_tests PRIVATE Qt6::Core Qt6::Test)
+    add_test(NAME ambient_mode_backend COMMAND ambient_mode_backend_tests)
+endif()
 
 # ── macOS bundle metadata ──────────────────────────────────────────────────────
 set_target_properties(240mp PROPERTIES
@@ -114,12 +158,30 @@ install(DIRECTORY
     "${CMAKE_SOURCE_DIR}/modules"
     "${CMAKE_SOURCE_DIR}/assets"
     DESTINATION "${APP_DISPLAY_NAME}.app/Contents/Resources"
-    COMPONENT Runtime)
+    COMPONENT Runtime
+    PATTERN ".DS_Store" EXCLUDE)
 
 install(FILES
     "${CMAKE_SOURCE_DIR}/scripts/ambient-osc.lua"
     "${CMAKE_SOURCE_DIR}/scripts/mpv-osc.lua"
     DESTINATION "${APP_DISPLAY_NAME}.app/Contents/Resources/scripts"
+    COMPONENT Runtime)
+
+install(PROGRAMS "${YT_DLP_EXECUTABLE}"
+    DESTINATION "${APP_DISPLAY_NAME}.app/Contents/Resources/bin"
+    RENAME yt-dlp
+    COMPONENT Runtime)
+
+install(PROGRAMS "${DENO_EXECUTABLE}"
+    DESTINATION "${APP_DISPLAY_NAME}.app/Contents/Resources/bin"
+    RENAME deno
+    COMPONENT Runtime)
+
+install(FILES
+    "${CMAKE_SOURCE_DIR}/LICENSE"
+    ${BUNDLED_YT_DLP_LICENSES}
+    "${BUNDLED_DENO_LICENSE}"
+    DESTINATION "${APP_DISPLAY_NAME}.app/Contents/Resources/licenses"
     COMPONENT Runtime)
 
 if(MPV_EXECUTABLE)
@@ -150,6 +212,22 @@ if(FFPROBE_EXECUTABLE)
         )
         if(NOT bundle_ffprobe_result EQUAL 0)
             message(FATAL_ERROR \"Failed to bundle ffprobe into ${APP_DISPLAY_NAME}.app\")
+        endif()
+    ")
+endif()
+
+if(FFMPEG_EXECUTABLE)
+    install(CODE "
+        execute_process(
+            COMMAND /bin/zsh
+                \"${CMAKE_SOURCE_DIR}/scripts/macos_bundle_tool_deps.zsh\"
+                \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${APP_DISPLAY_NAME}.app\"
+                \"${FFMPEG_EXECUTABLE_REAL}\"
+                \"Contents/Resources/bin\"
+            RESULT_VARIABLE bundle_ffmpeg_result
+        )
+        if(NOT bundle_ffmpeg_result EQUAL 0)
+            message(FATAL_ERROR \"Failed to bundle ffmpeg into ${APP_DISPLAY_NAME}.app\")
         endif()
     ")
 endif()

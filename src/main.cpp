@@ -8,12 +8,14 @@
 #include <QDebug>
 #include <QWindow>
 #include <QScreen>
+#include <QVariant>
 #include <locale.h>
 
 #include "AppCore.h"
 #include "modules/local_files/LocalFilesBackend.h"
 #include "modules/plex/PlexBackend.h"
 #include "modules/jellyfin/JellyfinBackend.h"
+#include "modules/karaoke/KaraokeBackend.h"
 #include "modules/ambient_mode/AmbientModeBackend.h"
 #include "modules/tumblr_screensaver/TumblrScreensaverBackend.h"
 #include "player/MpvController.h"
@@ -107,7 +109,8 @@ int main(int argc, char *argv[]) {
     LocalFilesBackend   localFiles(appRoot, dataRoot);
     PlexBackend         plexBackend(appRoot, dataRoot);
     JellyfinBackend     jellyfinBackend(appRoot, dataRoot);
-    AmbientModeBackend  ambientMode(dataRoot);
+    KaraokeBackend      karaokeBackend(appRoot, dataRoot);
+    AmbientModeBackend  ambientMode(appRoot, dataRoot);
     TumblrScreensaverBackend tumblrScreensaver;
     MpvController       mpvController(appRoot);
 
@@ -136,6 +139,7 @@ int main(int argc, char *argv[]) {
     appCore.registerModule("com.240mp.local_files",  "localFilesBackend",  &localFiles,  ctx);
     appCore.registerModule("com.240mp.plex",         "plexBackend",        &plexBackend, ctx);
     appCore.registerModule("com.240mp.jellyfin",     "jellyfinBackend",    &jellyfinBackend, ctx);
+    appCore.registerModule("com.240mp.karaoke",      "karaokeBackend",     &karaokeBackend, ctx);
     appCore.registerModule("com.240mp.ambient_mode", "ambientModeBackend", &ambientMode, ctx);
     appCore.registerModule("com.240mp.tumblr_screensaver", "tumblrScreensaverBackend", &tumblrScreensaver, ctx);
 
@@ -144,14 +148,13 @@ int main(int argc, char *argv[]) {
     QScreen *externalMediaScreen = resolveExternalMediaScreen();
     QRect externalMediaGeometry = externalMediaScreen ? externalMediaScreen->geometry() : QRect(0, 0, macW, macH);
     ctx->setContextProperty("hasExternalMediaScreen", externalMediaScreen != nullptr);
-    ctx->setContextProperty("externalMediaScreen", externalMediaScreen ? externalMediaScreen : QGuiApplication::primaryScreen());
     ctx->setContextProperty("externalMediaScreenX", externalMediaGeometry.x());
     ctx->setContextProperty("externalMediaScreenY", externalMediaGeometry.y());
     ctx->setContextProperty("externalMediaScreenWidth", externalMediaGeometry.width());
     ctx->setContextProperty("externalMediaScreenHeight", externalMediaGeometry.height());
 #ifdef Q_OS_MAC
-    engine.rootContext()->setContextProperty("macScreenX",      0);
-    engine.rootContext()->setContextProperty("macScreenY",      0);
+    engine.rootContext()->setContextProperty("macScreenX",      QVariant::fromValue(0));
+    engine.rootContext()->setContextProperty("macScreenY",      QVariant::fromValue(0));
     engine.rootContext()->setContextProperty("macScreenWidth",  macW);
     engine.rootContext()->setContextProperty("macScreenHeight", macH);
 #endif

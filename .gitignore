@@ -10,3 +10,13 @@ Thumbs.db
 # 240-MP #
 ######################
 /build
+/build-*
+/dist
+/install
+
+# Local runtime state and credentials
+jellyfin_auth.json
+config.json
+.dev.vars
+.env
+.env.*

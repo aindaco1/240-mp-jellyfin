@@ -1,8 +1,8 @@
 # 240-mp-jellyfin Development Guidelines
 
-240-mp-jellyfin is a macOS Apple Silicon fork of 240-MP. It keeps the retro VHS/CRT-style Qt 6 + QML shell, keeps Local, Loop, Retro, and Tumblr, hides Plex, and adds Jellyfin as the primary server-backed module.
+240-mp-jellyfin is a macOS Apple Silicon fork of 240-MP. It keeps the retro VHS/CRT-style Qt 6 + QML shell, keeps Local, Loop, Retro, and Tumblr, hides Plex, adds Jellyfin as the primary server-backed module, and adds a Funbox-backed Karaoke queue.
 
-**Playback engine**: the app launches `mpv` as a subprocess through `MpvController`. Local track probing uses `ffprobe`. Development builds can use Homebrew `mpv` and `ffprobe`; packaged macOS apps bundle both helpers and their non-system dynamic libraries.
+**Playback engine**: the app launches `mpv` as a subprocess through `MpvController`. Local track probing uses `ffprobe`. CMake downloads pinned, checksum-verified standalone `yt-dlp` and Deno helpers for YouTube extraction. Packaged macOS apps bundle all four helpers; end users do not need system copies.
 
 ---
 
@@ -40,7 +40,7 @@ For packaging, CI, and config paths, see **[BUILDING.md](BUILDING.md)** and **[I
 ## Key Facts
 
 - CMake intentionally fails on non-macOS hosts.
-- User-facing modules are `jellyfin`, `retro_tv`, `local_files`, `ambient_mode`, and `tumblr_screensaver`, displayed as Jellyfin, Retro, Local, Loop, and Tumblr.
+- User-facing modules are `jellyfin`, `karaoke`, `retro_tv`, `tumblr_screensaver`, `local_files`, and `ambient_mode`, displayed in that order as Jellyfin, Karaoke, Retro, Tumblr, Local, and Loop.
 - Plex remains in the source tree but is hidden by `modules/plex/manifest.json`.
 - Modules are discovered from `modules/*/manifest.json`; a backend module adds one `registerModule(...)` call in `src/main.cpp`.
 - `registerModule` wires optional backend signals/slots by introspection: `dynamicOptionsReady`, `authStateChanged`, and `onSettingChanged`.
@@ -48,4 +48,5 @@ For packaging, CI, and config paths, see **[BUILDING.md](BUILDING.md)** and **[I
 - Size QML layouts with `root.sh` / `root.sw`.
 - Config is `config.json` under `~/Library/Application Support/240-mp-jellyfin/`.
 - Jellyfin auth is `jellyfin_auth.json`; passwords are never persisted.
+- Karaoke stores a non-secret 24-hour catalog cache, persistent queue, and generated playback playlist under the same app data directory.
 - Do not log tokens, passwords, full auth headers, or token-bearing URLs.

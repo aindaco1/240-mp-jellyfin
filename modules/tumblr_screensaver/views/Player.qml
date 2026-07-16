@@ -127,20 +127,6 @@ FocusScope {
         statusTimer.restart()
     }
 
-    function clamp01(value) {
-        return Math.max(0, Math.min(1, value))
-    }
-
-    function easeOutCubic(value) {
-        var t = clamp01(value)
-        return 1 - Math.pow(1 - t, 3)
-    }
-
-    function easeInCubic(value) {
-        var t = clamp01(value)
-        return t * t * t
-    }
-
     function resetBlockSeeds() {
         var values = []
         for (var i = 0; i < blockColumns * blockRows; ++i)
@@ -523,10 +509,10 @@ FocusScope {
                                          : playerRoot.blockVariant === 1
                                            ? (columnDelay * 0.26 + seed * 0.12)
                                            : ((columnDelay + rowDelay) * 0.15 + seed * 0.12)
-                property real enterPhase: playerRoot.clamp01((playerRoot.blockProgress - waveDelay) / 0.34)
-                property real exitPhase: playerRoot.clamp01((playerRoot.blockProgress - 0.72 - waveDelay * 0.25) / 0.24)
-                property real enterEase: playerRoot.easeOutCubic(enterPhase)
-                property real exitEase: playerRoot.easeInCubic(exitPhase)
+                property real enterPhase: TransitionMath.clamp01((playerRoot.blockProgress - waveDelay) / 0.34)
+                property real exitPhase: TransitionMath.clamp01((playerRoot.blockProgress - 0.72 - waveDelay * 0.25) / 0.24)
+                property real enterEase: TransitionMath.easeOutCubic(enterPhase)
+                property real exitEase: TransitionMath.easeInCubic(exitPhase)
                 property real blockW: Math.ceil(outputSurface.width / playerRoot.blockColumns) + 2
                 property real blockH: Math.ceil(outputSurface.height / playerRoot.blockRows) + 2
                 property real homeX: col * (outputSurface.width / playerRoot.blockColumns)
@@ -539,7 +525,7 @@ FocusScope {
                 x: homeX +
                    (playerRoot.blockVariant === 1 ? Math.sin((row + seed) * 2.7) * outputSurface.width * 0.018 * (1 - enterEase) : 0)
                 y: homeY - (1 - enterEase) * (outputSurface.height * (0.45 + seed * 0.75))
-                opacity: playerRoot.clamp01(enterPhase * 1.4) * (1 - exitPhase)
+                opacity: TransitionMath.clamp01(enterPhase * 1.4) * (1 - exitPhase)
                 rotation: playerRoot.blockVariant === 2
                           ? (1 - enterEase) * (seed > 0.5 ? 18 : -18)
                           : 0

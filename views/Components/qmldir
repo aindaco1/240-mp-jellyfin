@@ -1,3 +1,8 @@
 module Components
 AppBar AppBar.qml
 PlaybackControlPanel PlaybackControlPanel.qml
+SelectableMarqueeRow SelectableMarqueeRow.qml
+PlaybackTransitionOverlay PlaybackTransitionOverlay.qml
+ConfirmDialog ConfirmDialog.qml
+singleton TextSearch 1.0 TextSearch.qml
+singleton TransitionMath 1.0 TransitionMath.qml

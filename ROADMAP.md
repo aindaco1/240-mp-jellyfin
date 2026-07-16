@@ -1,6 +1,6 @@
 # Roadmap
 
-1.0 establishes the macOS-only Jellyfin fork: movie-library browsing, direct-play playback, Local support, Loop, bundled playback helpers, and a hidden Plex reference module. Post-1.0 work has added TV show, season, and episode browsing, Retro decade feeds, and a Tumblr image screensaver.
+1.0 establishes the macOS-only Jellyfin fork: movie-library browsing, direct-play playback, Local support, Loop, bundled playback helpers, and a hidden Plex reference module. Post-1.0 work has added TV show, season, and episode browsing, Retro decade feeds, a Tumblr image screensaver, and a persistent multi-source Karaoke queue.
 
 The next goal is to make 240-mp-jellyfin reliable as a daily-use macOS media app before expanding the media surface.
 
@@ -29,10 +29,9 @@ The next goal is to make 240-mp-jellyfin reliable as a daily-use macOS media app
 
 ### Packaging Hardening
 
-- Add a CI check that verifies bundled `mpv` and `ffprobe` do not retain Homebrew load paths.
-- Add a CI check that the app bundle does not include `.DS_Store` files or build-only scripts.
 - Document signing/notarization secrets required by the release workflow.
 - Add a release checklist for local install verification before tagging.
+- Add a deliberate pinned-helper update cadence and a small diagnostics surface for bundled mpv, ffprobe, yt-dlp, and Deno versions.
 
 ## Candidate 1.x Features
 
