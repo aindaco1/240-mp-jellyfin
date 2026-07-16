@@ -274,7 +274,9 @@ The Tumblr module lives in `modules/tumblr_screensaver/` and `src/modules/tumblr
 
 - Users enter a public Tumblr URL in the module's first view; the URL is persisted through `appCore.save_setting(...)`.
 - `TumblrScreensaverBackend` fetches Tumblr's public JSON feed pages through `/api/read/json`, using `posts-total` and paged `start`/`num` requests to collect the blog.
-- The backend extracts Tumblr-hosted image URLs from post HTML, prefers the largest `srcset` candidate for still images, keeps GIF sources when present, and deduplicates exact image URLs.
+- The backend extracts Tumblr-hosted image URLs from post HTML, prefers the largest `srcset` candidate for still images, explicitly preserves GIF sources (including `.gifv` aliases), marks animated entries, and deduplicates exact image URLs.
+- `Items.qml` persists normalized, duplicate-free favorite blog URLs under `modules.com.240mp.tumblr_screensaver.favorites`; selecting a favorite starts it immediately, while Save/Remove and Delete edit the same list.
+- `TumblrMedia.qml` is the single renderer used by both player slots. It selects `Image` for stills and `AnimatedImage` for GIFs while exposing shared ready/error state to the transition controller; montage pause also pauses GIF frame advancement.
 - `Player.qml` renders a fullscreen QML image montage, shuffling the loaded images so a cycle does not repeat until every image has been shown once.
 - Transitions are handled entirely in QML with retro slide/zoom/fade motion, scanlines, and falling-block effects rather than mpv.
 - Falling-block transitions divide the incoming image into clipped tile regions so the next screen appears on the blocks as they fall.
@@ -482,7 +484,11 @@ User configuration is stored in `config.json` in the app's data directory:
     "com.240mp.karaoke": { "enabled": true },
     "com.240mp.local_files": { "enabled": true, "media_directory": "~/Desktop" },
     "com.240mp.ambient_mode": { "enabled": true, "media_directory": "~/Desktop" },
-    "com.240mp.tumblr_screensaver": { "enabled": true, "tumblr_url": "https://pixelskylines.tumblr.com/" }
+    "com.240mp.tumblr_screensaver": {
+      "enabled": true,
+      "tumblr_url": "https://pixelskylines.tumblr.com/",
+      "favorites": ["https://pixelskylines.tumblr.com/"]
+    }
   }
 }
 ```

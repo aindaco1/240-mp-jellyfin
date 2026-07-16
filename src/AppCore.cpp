@@ -8,6 +8,7 @@
 #include <QDebug>
 #include <QRegularExpression>
 #include <QQmlContext>
+#include <QJSValue>
 #include <algorithm>
 
 AppCore::AppCore(const QString &appRoot, const QString &dataRoot, QObject *parent)
@@ -147,6 +148,8 @@ QVariant AppCore::get_setting(const QString &moduleId, const QString &key) {
 
 void AppCore::save_setting(const QString &moduleId, const QString &key, const QVariant &value) {
     QJsonObject config = loadConfig();
+    const QVariant serializableValue = value.metaType() == QMetaType::fromType<QJSValue>()
+        ? value.value<QJSValue>().toVariant() : value;
 
     // Navigate to the target section
     auto getTarget = [&]() -> QJsonObject {
@@ -170,10 +173,10 @@ void AppCore::save_setting(const QString &moduleId, const QString &key, const QV
     QStringList parts = key.split('.', Qt::KeepEmptyParts);
     if (parts.size() == 2) {
         QJsonObject sub = target[parts[0]].toObject();
-        sub[parts[1]] = QJsonValue::fromVariant(value);
+        sub[parts[1]] = QJsonValue::fromVariant(serializableValue);
         target[parts[0]] = sub;
     } else {
-        target[key] = QJsonValue::fromVariant(value);
+        target[key] = QJsonValue::fromVariant(serializableValue);
     }
 
     setTarget(target);
@@ -181,12 +184,12 @@ void AppCore::save_setting(const QString &moduleId, const QString &key, const QV
 
     qDebug("[AppCore] Setting saved: %s.%s = %s",
            qPrintable(moduleId.isEmpty() ? "app" : moduleId),
-           qPrintable(key), qPrintable(value.toString()));
+           qPrintable(key), qPrintable(serializableValue.toString()));
 
     if (moduleId.isEmpty())
-        emit appSettingChanged(key, value.toString());
+        emit appSettingChanged(key, serializableValue.toString());
     else
-        emit moduleSettingChanged(moduleId, key, value);
+        emit moduleSettingChanged(moduleId, key, serializableValue);
 }
 
 QVariant AppCore::get_module_info(const QString &moduleId) {

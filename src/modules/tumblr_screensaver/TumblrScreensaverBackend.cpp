@@ -144,6 +144,7 @@ QVector<ImageCandidate> imagesFromPhotoFields(const QJsonObject &post)
 {
     QVector<ImageCandidate> result;
     ImageCandidate best;
+    ImageCandidate bestGif;
 
     for (auto it = post.constBegin(); it != post.constEnd(); ++it) {
         const QString key = it.key();
@@ -159,13 +160,19 @@ QVector<ImageCandidate> imagesFromPhotoFields(const QJsonObject &post)
         if (!isSupportedImageUrl(url))
             continue;
 
+        if (isGifUrl(url) && width > bestGif.width) {
+            bestGif.url = url;
+            bestGif.width = width;
+        }
         if (width > best.width) {
             best.url = url;
             best.width = width;
         }
     }
 
-    if (!best.url.isEmpty())
+    if (!bestGif.url.isEmpty())
+        result.append(bestGif);
+    else if (!best.url.isEmpty())
         result.append(best);
 
     const QJsonArray photos = post.value(QStringLiteral("photos")).toArray();
@@ -249,6 +256,14 @@ void TumblrScreensaverBackend::loadImages(const QString &tumblrUrl)
 
     emit loadStarted(blogUrl.toString(QUrl::RemoveQuery | QUrl::RemoveFragment));
     fetchPage(blogUrl, 0, m_generation);
+}
+
+QString TumblrScreensaverBackend::normalizeBlogUrl(const QString &tumblrUrl) const
+{
+    const QUrl normalized = normalizedBlogUrl(tumblrUrl);
+    return normalized.isValid() && !normalized.host().isEmpty()
+        ? normalized.toString(QUrl::RemoveQuery | QUrl::RemoveFragment)
+        : QString();
 }
 
 QUrl TumblrScreensaverBackend::normalizedBlogUrl(const QString &tumblrUrl) const
@@ -394,6 +409,7 @@ QVariantList TumblrScreensaverBackend::imagesFromPost(const QJsonObject &post) c
         image[QStringLiteral("title")] = title;
         image[QStringLiteral("width")] = candidate.width;
         image[QStringLiteral("height")] = candidate.height;
+        image[QStringLiteral("animated")] = isGifUrl(candidate.url);
         result.append(image);
     }
 

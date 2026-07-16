@@ -78,6 +78,8 @@ On macOS all user configuration is stored at:
   karaoke_queue.m3u8   ← generated canonical playback URLs
 ```
 
+Tumblr's current URL and favorites are ordinary module settings inside `config.json`; no separate database or credential file is used.
+
 This directory is created automatically on first run. It is separate from the app itself, so deleting or rebuilding the app will not wipe your settings.
 
 ## Debugging & logs

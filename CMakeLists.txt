@@ -153,6 +153,23 @@ if(BUILD_TESTING)
     target_include_directories(jellyfin_backend_tests PRIVATE src)
     target_link_libraries(jellyfin_backend_tests PRIVATE Qt6::Core Qt6::Network Qt6::Test)
     add_test(NAME jellyfin_backend COMMAND jellyfin_backend_tests)
+
+    add_executable(tumblr_screensaver_backend_tests
+        tests/TumblrScreensaverBackendTest.cpp
+        src/modules/tumblr_screensaver/TumblrScreensaverBackend.cpp
+    )
+    target_include_directories(tumblr_screensaver_backend_tests PRIVATE src)
+    target_link_libraries(tumblr_screensaver_backend_tests PRIVATE Qt6::Core Qt6::Network Qt6::Test)
+    add_test(NAME tumblr_screensaver_backend COMMAND tumblr_screensaver_backend_tests)
+
+    add_executable(tumblr_media_qml_tests
+        tests/TumblrMediaQmlTest.cpp
+    )
+    target_compile_definitions(tumblr_media_qml_tests PRIVATE
+        TEST_SOURCE_ROOT="${CMAKE_SOURCE_DIR}"
+    )
+    target_link_libraries(tumblr_media_qml_tests PRIVATE Qt6::Core Qt6::Gui Qt6::Quick Qt6::Qml Qt6::Test)
+    add_test(NAME tumblr_media_qml COMMAND tumblr_media_qml_tests)
 endif()
 
 # ── macOS bundle metadata ──────────────────────────────────────────────────────

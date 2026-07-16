@@ -3,6 +3,7 @@
 #include <QFile>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QJSEngine>
 #include <QTemporaryDir>
 #include <QtTest>
 
@@ -15,6 +16,8 @@ class AppCoreTest final : public QObject {
 
 private slots:
     void dottedSettingsRoundTrip();
+    void listSettingsRoundTrip();
+    void qmlListSettingsRoundTrip();
     void nonAuthBackendReturnsNoAuthState();
 };
 
@@ -33,6 +36,46 @@ void AppCoreTest::dottedSettingsRoundTrip()
     QCOMPARE(core.get_setting(QStringLiteral("com.example.module"),
                               QStringLiteral("remote_keymap.select")).toString(),
              QStringLiteral("Return"));
+}
+
+void AppCoreTest::qmlListSettingsRoundTrip()
+{
+    QTemporaryDir root;
+    QTemporaryDir data;
+    QVERIFY(root.isValid());
+    QVERIFY(data.isValid());
+
+    AppCore core(root.path(), data.path());
+    QJSEngine engine;
+    const QJSValue favorites = engine.evaluate(
+        QStringLiteral("['https://one.tumblr.com/', 'https://two.tumblr.com/']"));
+    core.save_setting(QStringLiteral("com.240mp.tumblr_screensaver"),
+                      QStringLiteral("favorites"), QVariant::fromValue(favorites));
+
+    QCOMPARE(core.get_setting(QStringLiteral("com.240mp.tumblr_screensaver"),
+                              QStringLiteral("favorites")).toStringList(),
+             QStringList({QStringLiteral("https://one.tumblr.com/"),
+                          QStringLiteral("https://two.tumblr.com/")}));
+}
+
+void AppCoreTest::listSettingsRoundTrip()
+{
+    QTemporaryDir root;
+    QTemporaryDir data;
+    QVERIFY(root.isValid());
+    QVERIFY(data.isValid());
+
+    AppCore core(root.path(), data.path());
+    const QStringList favorites = {
+        QStringLiteral("https://example-one.tumblr.com/"),
+        QStringLiteral("https://example-two.tumblr.com/")
+    };
+    core.save_setting(QStringLiteral("com.240mp.tumblr_screensaver"),
+                      QStringLiteral("favorites"), favorites);
+
+    QCOMPARE(core.get_setting(QStringLiteral("com.240mp.tumblr_screensaver"),
+                              QStringLiteral("favorites")).toStringList(),
+             favorites);
 }
 
 void AppCoreTest::nonAuthBackendReturnsNoAuthState()

@@ -158,6 +158,7 @@ FocusScope {
         }
 
         currentImageIndex = index
+        imageA.animated = images[index].animated === true
         imageA.source = images[index].url
         imageA.visible = true
         imageB.visible = false
@@ -181,6 +182,7 @@ FocusScope {
         pendingImageIndex = index
         var target = inactiveImage()
         pendingTarget = target === imageA ? "A" : "B"
+        target.animated = images[index].animated === true
         target.source = images[index].url
         target.visible = true
         target.opacity = 0
@@ -189,7 +191,7 @@ FocusScope {
         target.scale = 1
         target.rotation = 0
 
-        if (target.status === Image.Ready || target.status === Image.Error)
+        if (target.ready || target.failed)
             startPendingTransition()
     }
 
@@ -198,14 +200,14 @@ FocusScope {
             return
 
         var incoming = pendingTarget === "A" ? imageA : imageB
-        if (incoming.status === Image.Error) {
+        if (incoming.failed) {
             pendingImageIndex = -1
             pendingTarget = ""
             displayTimer.interval = 150
             displayTimer.restart()
             return
         }
-        if (incoming.status !== Image.Ready)
+        if (!incoming.ready)
             return
 
         currentImageIndex = pendingImageIndex
@@ -223,7 +225,9 @@ FocusScope {
         incoming.visible = true
         outgoing.visible = true
 
-        var type = Math.floor(Math.random() * 10)
+        // The falling-block renderer intentionally uses one static texture. Keep
+        // animated GIFs in the shared slide/fade family so their frames continue.
+        var type = Math.floor(Math.random() * (incoming.animated ? 7 : 10))
         if (type === 0) {
             incoming.opacity = 0
             setTargets(incoming, 0, 0, 1, 1, 0)
@@ -418,30 +422,26 @@ FocusScope {
             color: "black"
         }
 
-    Image {
+    TumblrMedia {
         id: imageA
         width: parent.width
         height: parent.height
-        fillMode: Image.PreserveAspectFit
-        asynchronous: true
-        cache: true
-        smooth: false
+        paused: playerRoot.paused
         transformOrigin: Item.Center
         visible: false
-        onStatusChanged: if (playerRoot.pendingTarget === "A") playerRoot.startPendingTransition()
+        onReadyChanged: if (playerRoot.pendingTarget === "A") playerRoot.startPendingTransition()
+        onFailedChanged: if (playerRoot.pendingTarget === "A") playerRoot.startPendingTransition()
     }
 
-    Image {
+    TumblrMedia {
         id: imageB
         width: parent.width
         height: parent.height
-        fillMode: Image.PreserveAspectFit
-        asynchronous: true
-        cache: true
-        smooth: false
+        paused: playerRoot.paused
         transformOrigin: Item.Center
         visible: false
-        onStatusChanged: if (playerRoot.pendingTarget === "B") playerRoot.startPendingTransition()
+        onReadyChanged: if (playerRoot.pendingTarget === "B") playerRoot.startPendingTransition()
+        onFailedChanged: if (playerRoot.pendingTarget === "B") playerRoot.startPendingTransition()
     }
 
     ParallelAnimation {

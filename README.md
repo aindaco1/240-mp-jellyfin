@@ -81,7 +81,9 @@ Not yet implemented: music libraries and explicit watched/unwatched controls fro
 ### Tumblr
 
 - Public Tumblr URL input, defaulting to `https://pixelskylines.tumblr.com/` for quick testing.
+- Persistent favorites with normalized URLs, duplicate suppression, one-key launch, and keyboard removal.
 - Image discovery through Tumblr's public `/api/read/json` feed pages.
+- Animated GIF playback with montage pause/resume support; static images and GIFs share the same transition/player path.
 - Fullscreen image montage that shuffles the image deck and does not repeat until every discovered image has been shown.
 - Retro 90s-style QML transitions, including falling blocks built from clipped pieces of the incoming image.
 
