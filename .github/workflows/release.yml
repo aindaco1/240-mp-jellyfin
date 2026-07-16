@@ -105,13 +105,16 @@ jobs:
             -T /usr/bin/codesign -T /usr/bin/security
           security list-keychain -d user -s "$KEYCHAIN_PATH"
           security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASS" "$KEYCHAIN_PATH"
+          identity=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" \
+            | sed -n 's/.*"\(Developer ID Application:[^"]*\)".*/\1/p' | head -n 1)
+          test -n "$identity"
+          echo "SIGNING_IDENTITY=$identity" >> "$GITHUB_ENV"
 
       - name: Sign app
         run: |
           APP="${GITHUB_WORKSPACE}/install/240-mp-jellyfin.app"
-          IDENTITY="Developer ID Application"
           find "$APP/Contents/Frameworks" \( -name "*.dylib" -o -name "*.framework" \) \
-            -exec codesign --force --options runtime --timestamp --sign "$IDENTITY" {} \;
+            -exec codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" {} \;
           if [ -d "$APP/Contents/Resources/bin" ]; then
             find "$APP/Contents/Resources/bin" -type f | while read -r helper; do
               if [ -x "$helper" ]; then
@@ -124,12 +127,12 @@ jobs:
                   codesign --force --options runtime \
                     --timestamp \
                     --entitlements "$entitlement_file" \
-                    --sign "$IDENTITY" "$helper"
+                    --sign "$SIGNING_IDENTITY" "$helper"
                 else
                   codesign --force --options runtime \
                     --timestamp \
                     --preserve-metadata=entitlements \
-                    --sign "$IDENTITY" "$helper"
+                    --sign "$SIGNING_IDENTITY" "$helper"
                 fi
               fi
             done
@@ -137,7 +140,7 @@ jobs:
           codesign --force --deep --options runtime \
             --timestamp \
             --preserve-metadata=entitlements \
-            --sign "$IDENTITY" "$APP"
+            --sign "$SIGNING_IDENTITY" "$APP"
           codesign --verify --deep --strict "$APP"
           expected_team=$(sed -n 's/^APP_UPDATE_TEAM_ID:STRING=//p' build/CMakeCache.txt)
           actual_team=$(codesign -dv --verbose=4 "$APP" 2>&1 | sed -n 's/^TeamIdentifier=//p')
@@ -230,9 +233,16 @@ jobs:
             -srcfolder "${GITHUB_WORKSPACE}/install" \
             -ov -format UDZO \
             "$DMG"
-          codesign --force --timestamp \
-            --sign "Developer ID Application" \
-            "$DMG"
+          hdiutil verify "$DMG"
+          for attempt in 1 2 3; do
+            if codesign --force --timestamp --sign "$SIGNING_IDENTITY" "$DMG"; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              exit 1
+            fi
+            sleep 2
+          done
           codesign --verify "$DMG"
 
       - name: Notarize and staple
