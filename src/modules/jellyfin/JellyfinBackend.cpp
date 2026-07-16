@@ -1,6 +1,7 @@
 #include "JellyfinBackend.h"
 
 #include <QFile>
+#include <QCoreApplication>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonValue>
@@ -12,6 +13,7 @@
 #include <QVariantList>
 #include <QVariantMap>
 #include <QDebug>
+#include <QRegularExpression>
 
 static constexpr int kItemsPageSize = 250;
 
@@ -37,6 +39,12 @@ static QString normalizedBrowseItemType(const QString &itemType) {
         return QStringLiteral("Season");
     if (trimmed.compare("Episode", Qt::CaseInsensitive) == 0)
         return QStringLiteral("Episode");
+    if (trimmed.compare("BoxSet", Qt::CaseInsensitive) == 0)
+        return QStringLiteral("BoxSet");
+    if (trimmed.compare("Folder", Qt::CaseInsensitive) == 0)
+        return QStringLiteral("Folder");
+    if (trimmed.compare("Video", Qt::CaseInsensitive) == 0)
+        return QStringLiteral("Video");
     return {};
 }
 
@@ -54,6 +62,35 @@ JellyfinBackend::JellyfinBackend(const QString &appRoot, const QString &dataRoot
     Q_UNUSED(appRoot);
     m_quickConnectTimer->setInterval(2000);
     connect(m_quickConnectTimer, &QTimer::timeout, this, &JellyfinBackend::pollQuickConnect);
+    const QJsonObject auth = loadAuth();
+    m_lastAudioLanguage = auth.value("lastAudioLanguage").toString();
+    m_lastSubtitleLanguage = auth.value("lastSubtitleLanguage").toString("__off__");
+}
+
+QJsonObject JellyfinBackend::moduleConfig() const {
+    QFile file(m_dataRoot + QStringLiteral("/config.json"));
+    if (!file.open(QIODevice::ReadOnly))
+        return {};
+    return QJsonDocument::fromJson(file.readAll()).object()
+        .value("modules").toObject().value("com.240mp.jellyfin").toObject();
+}
+
+int JellyfinBackend::videoQualityBitrate() const {
+    const QString quality = moduleConfig().value("video_quality").toString("direct");
+    if (quality == "480p") return 4000000;
+    if (quality == "576p") return 5000000;
+    if (quality == "720p") return 8000000;
+    if (quality == "1080p") return 16000000;
+    return 0;
+}
+
+int JellyfinBackend::videoQualityMaxHeight() const {
+    const QString quality = moduleConfig().value("video_quality").toString("direct");
+    if (quality == "480p") return 480;
+    if (quality == "576p") return 576;
+    if (quality == "720p") return 720;
+    if (quality == "1080p") return 1080;
+    return 0;
 }
 
 QString JellyfinBackend::authFilePath() const {
@@ -125,7 +162,7 @@ QString JellyfinBackend::authorizationValue(const QString &token) const {
                                              ? QStringLiteral("macOS")
                                              : QSysInfo::prettyProductName());
     parts << QString("DeviceId=\"%1\"").arg(deviceId());
-    parts << "Version=\"1.0\"";
+    parts << QString("Version=\"%1\"").arg(QCoreApplication::applicationVersion());
     if (!token.isEmpty())
         parts << QString("Token=\"%1\"").arg(token);
     return parts.join(", ");
@@ -334,9 +371,13 @@ void JellyfinBackend::load_libraries() {
         }
 
         QVariantList libraries;
+        const QJsonObject enabledLibraries = moduleConfig().value("libraries").toObject();
         const QJsonArray items = doc.object()["Items"].toArray();
         for (const QJsonValue &value : items) {
             const QJsonObject item = value.toObject();
+            const QString id = item.value("Id").toString();
+            if (!enabledLibraries.isEmpty() && !enabledLibraries.value(id).toBool(true))
+                continue;
             const QVariantMap formatted = formatLibrary(item);
             if (!formatted["id"].toString().isEmpty())
                 libraries.append(formatted);
@@ -495,7 +536,77 @@ void JellyfinBackend::load_item_detail(const QString &itemId) {
     });
 }
 
+void JellyfinBackend::load_special_items(const QUrl &url, const QString &errorPrefix) {
+    QNetworkReply *reply = jellyfinGet(url);
+    connect(reply, &QNetworkReply::finished, this, [this, reply, errorPrefix]() {
+        const QByteArray data = reply->readAll();
+        const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        const auto error = reply->error();
+        reply->deleteLater();
+        if (error != QNetworkReply::NoError || status < 200 || status >= 300) {
+            emit errorOccurred(QString("%1 (%2).").arg(errorPrefix).arg(status > 0 ? status : int(error)));
+            return;
+        }
+        const QJsonArray rawItems = QJsonDocument::fromJson(data).object().value("Items").toArray();
+        QVariantList items;
+        for (const QJsonValue &value : rawItems)
+            items << formatItem(value.toObject());
+        emit itemsPageLoaded(items, true, true);
+    });
+}
+
+void JellyfinBackend::load_continue_watching() {
+    QUrl url(serverUrl() + "/Users/" + userId() + "/Items/Resume");
+    QUrlQuery query;
+    query.addQueryItem("limit", "50");
+    query.addQueryItem("fields", detailItemFields());
+    query.addQueryItem("mediaTypes", "Video");
+    url.setQuery(query);
+    load_special_items(url, QStringLiteral("Could not load Continue Watching"));
+}
+
+void JellyfinBackend::load_up_next() {
+    QUrl url(serverUrl() + "/Shows/NextUp");
+    QUrlQuery query;
+    query.addQueryItem("userId", userId());
+    query.addQueryItem("limit", "50");
+    query.addQueryItem("fields", detailItemFields());
+    query.addQueryItem("enableUserData", "true");
+    url.setQuery(query);
+    load_special_items(url, QStringLiteral("Could not load Up Next"));
+}
+
+void JellyfinBackend::load_boxset_children(const QString &parentId) {
+    QUrl url(serverUrl() + "/Users/" + userId() + "/Items");
+    QUrlQuery query;
+    query.addQueryItem("parentId", parentId);
+    query.addQueryItem("recursive", "false");
+    query.addQueryItem("fields", detailItemFields() + ",PremiereDate,DateCreated,IsFolder");
+    query.addQueryItem("sortBy", "PremiereDate,ProductionYear,SortName");
+    query.addQueryItem("sortOrder", "Ascending");
+    url.setQuery(query);
+    load_special_items(url, QStringLiteral("Could not load collection"));
+}
+
+void JellyfinBackend::load_folder_children(const QString &parentId) {
+    QUrl url(serverUrl() + "/Users/" + userId() + "/Items");
+    QUrlQuery query;
+    query.addQueryItem("parentId", parentId);
+    query.addQueryItem("recursive", "false");
+    query.addQueryItem("fields", detailItemFields() + ",IsFolder");
+    query.addQueryItem("sortBy", "SortName");
+    query.addQueryItem("sortOrder", "Ascending");
+    url.setQuery(query);
+    load_special_items(url, QStringLiteral("Could not load folder"));
+}
+
 void JellyfinBackend::build_stream_url(const QString &itemId, const QString &mediaSourceId) {
+    request_playback(itemId, mediaSourceId, -1, -1, false, 0);
+}
+
+void JellyfinBackend::request_playback(const QString &itemId, const QString &mediaSourceId,
+                                       int audioStreamIndex, int subtitleStreamIndex,
+                                       bool forceTranscode, qint64 startPositionTicks) {
     const QString base = serverUrl();
     const QString token = accessToken();
     if (base.isEmpty() || token.isEmpty() || itemId.isEmpty()) {
@@ -503,17 +614,281 @@ void JellyfinBackend::build_stream_url(const QString &itemId, const QString &med
         return;
     }
 
-    QUrl url(base + "/Videos/" + itemId + "/stream");
-    QUrlQuery query;
-    query.addQueryItem("static", "true");
-    query.addQueryItem("deviceId", deviceId());
-    if (!mediaSourceId.isEmpty())
-        query.addQueryItem("mediaSourceId", mediaSourceId);
-    url.setQuery(query);
+    const QString quality = moduleConfig().value("video_quality").toString("direct");
+    const bool wantsDirectPlay = !forceTranscode && quality == QLatin1String("direct");
 
-    QVariantList headers;
-    headers.append(QString("X-Emby-Token:%1").arg(token));
-    emit streamUrlReady(url.toString(), headers);
+    QJsonObject body;
+    body["UserId"] = userId();
+    if (!mediaSourceId.isEmpty()) body["MediaSourceId"] = mediaSourceId;
+    if (audioStreamIndex >= 0) body["AudioStreamIndex"] = audioStreamIndex;
+    if (subtitleStreamIndex >= 0) body["SubtitleStreamIndex"] = subtitleStreamIndex;
+    if (videoQualityBitrate() > 0) body["MaxStreamingBitrate"] = videoQualityBitrate();
+    if (videoQualityMaxHeight() > 0) body["MaxHeight"] = videoQualityMaxHeight();
+    body["EnableDirectPlay"] = wantsDirectPlay;
+    body["EnableDirectStream"] = wantsDirectPlay;
+
+    QJsonArray subtitleProfiles;
+    const QStringList subtitleFormats = {
+        "subrip", "srt", "ass", "ssa", "vtt", "webvtt", "mov_text",
+        "pgssub", "dvbsub", "dvdsub"
+    };
+    for (const QString &format : subtitleFormats) {
+        subtitleProfiles.append(QJsonObject{
+            {"Format", format},
+            {"Method", wantsDirectPlay ? QStringLiteral("Embed") : QStringLiteral("Encode")}
+        });
+    }
+    QJsonObject profile;
+    profile["SubtitleProfiles"] = subtitleProfiles;
+    profile["TranscodingProfiles"] = QJsonArray{QJsonObject{
+        {"Container", "ts"}, {"Type", "Video"}, {"VideoCodec", "h264"},
+        {"AudioCodec", "aac,mp3"}, {"Protocol", "hls"}
+    }};
+    if (wantsDirectPlay)
+        profile["DirectPlayProfiles"] = QJsonArray{QJsonObject{{"Type", "Video"}}};
+    else
+        profile["DirectPlayProfiles"] = QJsonArray{};
+    body["DeviceProfile"] = profile;
+
+    QUrl playbackInfoUrl(base + "/Items/" + itemId + "/PlaybackInfo");
+    QNetworkReply *reply = jellyfinPostJson(
+        playbackInfoUrl, QJsonDocument(body).toJson(QJsonDocument::Compact));
+    connect(reply, &QNetworkReply::finished, this,
+            [this, reply, base, token, itemId, mediaSourceId, audioStreamIndex,
+             subtitleStreamIndex, wantsDirectPlay, startPositionTicks]() {
+        const QByteArray data = reply->readAll();
+        const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        const auto error = reply->error();
+        reply->deleteLater();
+        if (error != QNetworkReply::NoError || status < 200 || status >= 300) {
+            emit errorOccurred(QString("Jellyfin playback negotiation failed (%1).")
+                                   .arg(status > 0 ? status : int(error)));
+            return;
+        }
+
+        const QJsonObject response = QJsonDocument::fromJson(data).object();
+        const QJsonArray sources = response.value("MediaSources").toArray();
+        if (sources.isEmpty()) {
+            emit errorOccurred("Jellyfin did not return a playable source.");
+            return;
+        }
+
+        const QJsonObject source = sources.first().toObject();
+        const QString playSessionId = response.value("PlaySessionId").toString();
+        m_currentPlaySessionId = playSessionId;
+        QString urlString;
+
+        if (wantsDirectPlay && (source.value("SupportsDirectPlay").toBool() ||
+                                source.value("SupportsDirectStream").toBool())) {
+            QUrl directUrl(base + "/Videos/" + itemId + "/stream");
+            QUrlQuery query;
+            query.addQueryItem("static", "true");
+            query.addQueryItem("deviceId", deviceId());
+            query.addQueryItem("mediaSourceId", source.value("Id").toString(mediaSourceId));
+            if (!playSessionId.isEmpty()) query.addQueryItem("PlaySessionId", playSessionId);
+            directUrl.setQuery(query);
+            urlString = directUrl.toString();
+            m_currentPlayMethod = QStringLiteral("DirectPlay");
+        } else {
+            QString transcodePath = source.value("TranscodingUrl").toString();
+            if (transcodePath.isEmpty()) {
+                emit errorOccurred("Jellyfin did not return a transcode URL.");
+                return;
+            }
+            QUrl transcodeUrl = QUrl(transcodePath).isRelative()
+                ? QUrl(base + transcodePath) : QUrl(transcodePath);
+            QUrlQuery query(transcodeUrl);
+            for (const auto &item : query.queryItems()) {
+                if (item.first.compare("api_key", Qt::CaseInsensitive) == 0 ||
+                    item.first.compare("apikey", Qt::CaseInsensitive) == 0)
+                    query.removeAllQueryItems(item.first);
+            }
+            if (subtitleStreamIndex < 0) {
+                query.removeAllQueryItems("SubtitleStreamIndex");
+                query.removeAllQueryItems("SubtitleMethod");
+            }
+            const int maxHeight = videoQualityMaxHeight();
+            if (maxHeight > 0) {
+                query.removeAllQueryItems("MaxHeight");
+                query.addQueryItem("MaxHeight", QString::number(maxHeight));
+            }
+            transcodeUrl.setQuery(query);
+            urlString = transcodeUrl.toString();
+            m_currentPlayMethod = QStringLiteral("Transcode");
+        }
+
+        report_playback_start(itemId, mediaSourceId, audioStreamIndex,
+                              subtitleStreamIndex, startPositionTicks);
+        emit streamUrlReady(urlString,
+            QVariantList{QString("X-Emby-Token:%1").arg(token)});
+    });
+}
+
+void JellyfinBackend::report_playback_start(const QString &itemId, const QString &mediaSourceId,
+                                            int audioStreamIndex, int subtitleStreamIndex,
+                                            qint64 startPositionTicks) {
+    QJsonObject body{{"ItemId", itemId}, {"MediaSourceId", mediaSourceId},
+                     {"PlayMethod", m_currentPlayMethod}, {"IsPaused", false},
+                     {"CanSeek", true}};
+    if (!m_currentPlaySessionId.isEmpty()) body["PlaySessionId"] = m_currentPlaySessionId;
+    if (audioStreamIndex >= 0) body["AudioStreamIndex"] = audioStreamIndex;
+    if (subtitleStreamIndex >= 0) body["SubtitleStreamIndex"] = subtitleStreamIndex;
+    if (startPositionTicks > 0) body["StartPositionTicks"] = double(startPositionTicks);
+    QNetworkReply *reply = jellyfinPostJson(
+        QUrl(serverUrl() + "/Sessions/Playing"),
+        QJsonDocument(body).toJson(QJsonDocument::Compact));
+    connect(reply, &QNetworkReply::finished, reply, &QObject::deleteLater);
+}
+
+void JellyfinBackend::update_playback_progress(const QString &itemId,
+                                               const QString &mediaSourceId,
+                                               qint64 positionTicks, bool isPaused) {
+    if (get_auth_state() != QLatin1String("authed")) return;
+    QJsonObject body{{"ItemId", itemId}, {"MediaSourceId", mediaSourceId},
+                     {"PositionTicks", double(positionTicks)}, {"IsPaused", isPaused},
+                     {"PlayMethod", m_currentPlayMethod}, {"CanSeek", true}};
+    if (!m_currentPlaySessionId.isEmpty()) body["PlaySessionId"] = m_currentPlaySessionId;
+    QNetworkReply *reply = jellyfinPostJson(
+        QUrl(serverUrl() + "/Sessions/Playing/Progress"),
+        QJsonDocument(body).toJson(QJsonDocument::Compact));
+    connect(reply, &QNetworkReply::finished, reply, &QObject::deleteLater);
+}
+
+void JellyfinBackend::report_playback_stopped(const QString &itemId,
+                                              const QString &mediaSourceId,
+                                              qint64 positionTicks, bool failed) {
+    if (get_auth_state() != QLatin1String("authed")) return;
+    const QString session = m_currentPlaySessionId;
+    QJsonObject body{{"ItemId", itemId}, {"MediaSourceId", mediaSourceId},
+                     {"PositionTicks", double(positionTicks)}, {"Failed", failed},
+                     {"PlayMethod", m_currentPlayMethod}};
+    if (!session.isEmpty()) body["PlaySessionId"] = session;
+    QNetworkReply *reply = jellyfinPostJson(
+        QUrl(serverUrl() + "/Sessions/Playing/Stopped"),
+        QJsonDocument(body).toJson(QJsonDocument::Compact));
+    connect(reply, &QNetworkReply::finished, this, [this, reply, session]() {
+        reply->deleteLater();
+        if (m_currentPlaySessionId == session)
+            m_currentPlaySessionId.clear();
+    });
+}
+
+void JellyfinBackend::load_next_episode(const QString &currentItemId) {
+    QUrl currentUrl(serverUrl() + "/Users/" + userId() + "/Items/" + currentItemId);
+    QUrlQuery currentQuery;
+    currentQuery.addQueryItem("fields", "SeriesId,IndexNumber,ParentIndexNumber");
+    currentUrl.setQuery(currentQuery);
+    QNetworkReply *currentReply = jellyfinGet(currentUrl);
+    connect(currentReply, &QNetworkReply::finished, this, [this, currentReply]() {
+        const QJsonObject current = QJsonDocument::fromJson(currentReply->readAll()).object();
+        const auto error = currentReply->error();
+        currentReply->deleteLater();
+        const QString seriesId = current.value("SeriesId").toString();
+        if (error != QNetworkReply::NoError || seriesId.isEmpty()) {
+            emit nextEpisodeReady({});
+            return;
+        }
+
+        const int currentSeason = current.value("ParentIndexNumber").toInt(-1);
+        const int currentEpisode = current.value("IndexNumber").toInt(-1);
+        QUrl episodesUrl(serverUrl() + "/Shows/" + seriesId + "/Episodes");
+        QUrlQuery query;
+        query.addQueryItem("userId", userId());
+        query.addQueryItem("fields", detailItemFields() + ",SeriesId");
+        query.addQueryItem("enableUserData", "true");
+        query.addQueryItem("sortBy", "AiredEpisodeOrder");
+        episodesUrl.setQuery(query);
+        QNetworkReply *episodesReply = jellyfinGet(episodesUrl);
+        connect(episodesReply, &QNetworkReply::finished, this,
+                [this, episodesReply, currentSeason, currentEpisode]() {
+            const QJsonArray episodes = QJsonDocument::fromJson(episodesReply->readAll())
+                                            .object().value("Items").toArray();
+            const auto error = episodesReply->error();
+            episodesReply->deleteLater();
+            if (error != QNetworkReply::NoError) {
+                emit nextEpisodeReady({});
+                return;
+            }
+            for (const QJsonValue &value : episodes) {
+                const QJsonObject episode = value.toObject();
+                const int season = episode.value("ParentIndexNumber").toInt(-1);
+                const int index = episode.value("IndexNumber").toInt(-1);
+                if (season > currentSeason || (season == currentSeason && index > currentEpisode)) {
+                    emit nextEpisodeReady(formatItem(episode));
+                    return;
+                }
+            }
+            emit nextEpisodeReady({});
+        });
+    });
+}
+
+void JellyfinBackend::probeCapabilities() {
+    if (m_capabilitiesProbed) {
+        emit dynamicOptionsReady("_capabilities",
+            m_hasMediaSegments ? QVariantList{QStringLiteral("mediasegments")} : QVariantList{});
+        return;
+    }
+    QNetworkReply *reply = jellyfinGet(
+        QUrl(serverUrl() + "/MediaSegments/00000000-0000-0000-0000-000000000000"));
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        reply->deleteLater();
+        if (status > 0) {
+            m_capabilitiesProbed = true;
+            m_hasMediaSegments = status != 404;
+        }
+        emit dynamicOptionsReady("_capabilities",
+            m_hasMediaSegments ? QVariantList{QStringLiteral("mediasegments")} : QVariantList{});
+    });
+}
+
+void JellyfinBackend::fetchSegments(const QString &itemId) {
+    if (itemId.isEmpty()) return;
+    QNetworkReply *reply = jellyfinGet(QUrl(serverUrl() + "/MediaSegments/" + itemId));
+    connect(reply, &QNetworkReply::finished, this, [this, reply, itemId]() {
+        const QByteArray data = reply->readAll();
+        const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        const auto error = reply->error();
+        reply->deleteLater();
+        if (status == 404) {
+            m_capabilitiesProbed = true;
+            m_hasMediaSegments = false;
+            emit segmentsReady(itemId, {});
+            return;
+        }
+        if (error != QNetworkReply::NoError) {
+            emit segmentsReady(itemId, {});
+            return;
+        }
+        m_capabilitiesProbed = true;
+        m_hasMediaSegments = true;
+        QVariantList segments;
+        const QJsonArray items = QJsonDocument::fromJson(data).object().value("Items").toArray();
+        for (const QJsonValue &value : items) {
+            const QJsonObject item = value.toObject();
+            const QString type = item.value("Type").toString();
+            if (type != QLatin1String("Intro") && type != QLatin1String("Outro"))
+                continue;
+            segments << QVariantMap{
+                {"type", type},
+                {"startMs", item.value("StartTicks").toVariant().toLongLong() / 10000},
+                {"endMs", item.value("EndTicks").toVariant().toLongLong() / 10000}
+            };
+        }
+        emit segmentsReady(itemId, segments);
+    });
+}
+
+void JellyfinBackend::set_last_track_languages(const QString &audioLanguage,
+                                               const QString &subtitleLanguage) {
+    m_lastAudioLanguage = audioLanguage;
+    m_lastSubtitleLanguage = subtitleLanguage.isEmpty() ? QStringLiteral("__off__")
+                                                        : subtitleLanguage;
+    QJsonObject auth = loadAuth();
+    auth["lastAudioLanguage"] = m_lastAudioLanguage;
+    auth["lastSubtitleLanguage"] = m_lastSubtitleLanguage;
+    saveAuth(auth);
 }
 
 bool JellyfinBackend::saveAuthenticationResult(const QJsonObject &result, const QString &baseUrl) {
@@ -628,7 +1003,36 @@ void JellyfinBackend::authenticateWithQuickConnectSecret() {
 void JellyfinBackend::getVideoQualities() {
     QVariantList opts;
     opts.append(QVariantMap{{"id", "direct"}, {"label", "Direct Play"}});
+    opts.append(QVariantMap{{"id", "480p"}, {"label", "480p"}});
+    opts.append(QVariantMap{{"id", "576p"}, {"label", "576p"}});
+    opts.append(QVariantMap{{"id", "720p"}, {"label", "720p"}});
+    opts.append(QVariantMap{{"id", "1080p"}, {"label", "1080p"}});
     emit dynamicOptionsReady("video_quality", opts);
+}
+
+void JellyfinBackend::getLibraries() {
+    QUrl url(serverUrl() + "/UserViews");
+    QUrlQuery query;
+    query.addQueryItem("userId", userId());
+    query.addQueryItem("includeExternalContent", "false");
+    query.addQueryItem("includeHidden", "false");
+    url.setQuery(query);
+    QNetworkReply *reply = jellyfinGet(url);
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        const QJsonArray items = QJsonDocument::fromJson(reply->readAll())
+                                     .object().value("Items").toArray();
+        const auto error = reply->error();
+        reply->deleteLater();
+        QVariantList options;
+        if (error == QNetworkReply::NoError) {
+            for (const QJsonValue &value : items) {
+                const QJsonObject item = value.toObject();
+                options << QVariantMap{{"id", item.value("Id").toString()},
+                                       {"label", item.value("Name").toString()}};
+            }
+        }
+        emit dynamicOptionsReady("libraries", options);
+    });
 }
 
 void JellyfinBackend::get_resume_playback_options() {
@@ -767,6 +1171,9 @@ QVariantMap JellyfinBackend::formatItem(const QJsonObject &item) const {
     out["parentIndex"] = item["ParentIndexNumber"].toInt(-1);
     out["parentIndexNumber"] = item["ParentIndexNumber"].toInt(-1);
     out["episodeCode"] = itemType == "Episode" ? episodeCode(item) : QString();
+    out["seriesId"] = item["SeriesId"].toString();
+    out["isFolder"] = item["IsFolder"].toBool(false);
+    out["premiereDate"] = item["PremiereDate"].toString();
 
     const QJsonObject userData = item["UserData"].toObject();
     out["viewOffset"] = ticksToMs(userData["PlaybackPositionTicks"].toVariant().toLongLong());
@@ -799,6 +1206,10 @@ QVariantMap JellyfinBackend::formatItem(const QJsonObject &item) const {
                 {"streamIndex", stream["Index"].toInt(-1)},
                 {"mpvTrack", audioTrack},
                 {"isDefault", stream["IsDefault"].toBool(false)},
+                {"language", stream["Language"].toString()},
+                {"title", stream["Title"].toString()},
+                {"codec", stream["Codec"].toString()},
+                {"channels", stream["Channels"].toInt()},
                 {"displayTitle", jellyfinStreamLabel(stream, "AUDIO", audioTrack)}
             });
         } else if (type.compare("Subtitle", Qt::CaseInsensitive) == 0) {
@@ -825,6 +1236,9 @@ QVariantMap JellyfinBackend::formatItem(const QJsonObject &item) const {
                 {"isExternal", isExternal},
                 {"isDefault", stream["IsDefault"].toBool(false)},
                 {"isForced", stream["IsForced"].toBool(false)},
+                {"language", stream["Language"].toString()},
+                {"title", stream["Title"].toString()},
+                {"codec", stream["Codec"].toString()},
                 {"subFile", subUrl}
             });
         }

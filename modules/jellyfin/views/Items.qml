@@ -17,6 +17,7 @@ FocusScope {
     property string collectionType: navParams.collectionType || ""
     property string itemType: navParams.itemType || "Movie"
     property bool recursive: navParams.recursive !== undefined ? Boolean(navParams.recursive) : true
+    property string mode: navParams.mode || "browse"
     property string seriesName: navParams.seriesName || ""
     property string seasonName: navParams.seasonName || ""
     property var seriesItem: navParams.seriesItem || ({})
@@ -155,6 +156,19 @@ FocusScope {
             return
         }
 
+        if (item.type === "boxset" || item.isFolder) {
+            itemListRoot.navigateTo("Items.qml", {
+                parentId: item.id,
+                libraryId: libraryId,
+                libraryName: JellyfinMedia.breadcrumbText([libraryName, item.title]),
+                collectionType: collectionType,
+                mode: item.type === "boxset" ? "boxset" : "folder",
+                itemType: item.type === "boxset" ? "BoxSet" : "Video",
+                recursive: false
+            }, { currentIndex: itemList.currentIndex, filterText: filterText })
+            return
+        }
+
         itemListRoot.navigateTo("Detail.qml", {
             item: item,
             libraryName: subtitleText()
@@ -195,7 +209,16 @@ FocusScope {
         isLoading = true
         isLoadingMore = false
         errorMessage = ""
-        jellyfinBackend.load_items_for_type(parentId, itemType, recursive)
+        if (mode === "continue")
+            jellyfinBackend.load_continue_watching()
+        else if (mode === "upnext")
+            jellyfinBackend.load_up_next()
+        else if (mode === "boxset")
+            jellyfinBackend.load_boxset_children(parentId)
+        else if (mode === "folder")
+            jellyfinBackend.load_folder_children(parentId || libraryId)
+        else
+            jellyfinBackend.load_items_for_type(parentId, itemType, recursive)
     }
 
     focus: true

@@ -8,9 +8,18 @@ FocusScope {
     property var navListState: navParams.navListState || ({})
     property string folderPath: navParams.folderPath || localFilesBackend.mediaRoot()
     property string folderName: navParams.folderName || ""
+    property bool hideExtensions: false
 
     signal navigateTo(string path, var params, var listState)
     signal goBack()
+
+    function displayName(item) {
+        var name = item.name || ""
+        if (!hideExtensions || item.isFolder || name.charAt(0) === ".")
+            return name
+        var dot = name.lastIndexOf(".")
+        return dot > 0 ? name.slice(0, dot) : name
+    }
 
     focus: true
     Keys.onPressed: function(event) {
@@ -119,7 +128,7 @@ FocusScope {
 
                 Text {
                     id: rowText
-                    text: modelData.isFolder ? modelData.name + "/" : modelData.name
+                    text: itemsRoot.displayName(modelData) + (modelData.isFolder ? "/" : "")
                     color: fileList.currentIndex === index ? root.surfaceColor : root.primaryColor
                     font.family: root.globalFont
                     font.capitalization: Font.AllUppercase
@@ -151,6 +160,8 @@ FocusScope {
     }
 
     Component.onCompleted: {
+        var hideRaw = appCore.get_setting(moduleRoot.moduleId, "hide_extensions")
+        hideExtensions = hideRaw === true || hideRaw === "ON"
         var loaded = localFilesBackend.getItems(folderPath)
         fileList.model = loaded
         if (loaded.length > 0) {

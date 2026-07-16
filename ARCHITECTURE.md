@@ -35,6 +35,11 @@ The guiding idea: **browse structured content, then hand off to the right tool f
       ...
     player/
       MpvController.h/.cpp          # mpv subprocess controller: QProcess launch + IPC socket
+    input/
+      InputManager.h/.mm            # native macOS GameController + Right Shift navigation
+      IdleTracker.h/.cpp            # menu inactivity screen-saver tracking
+    update/
+      UpdateManager.h/.cpp          # signed GitHub release check/download/install workflow
   modules/                          # QML + assets per module (discovered at startup)
     jellyfin/
       manifest.json                 # module identity and settings shape
@@ -137,7 +142,7 @@ A real example from Plex — note `requires_auth`, dynamic options, and apply sl
 
 `AppCore` (`src/AppCore.h/.cpp`) is the shell. It's exposed to all QML as the context property **`appCore`**.
 
-**Global context properties** (available in all QML): `appCore`, `mpvController`, plus one per module backend (`localFilesBackend`, `jellyfinBackend`, `plexBackend`, `ambientModeBackend`, ...). Backend names are assigned by the `registerModule` call in `main.cpp`.
+**Global context properties** (available in all QML): `appCore`, `mpvController`, `idleTracker`, `inputManager`, `updateManager`, plus one per module backend (`localFilesBackend`, `jellyfinBackend`, `plexBackend`, `ambientModeBackend`, ...). Backend names are assigned by the `registerModule` call in `main.cpp`.
 
 ### Q_INVOKABLE slots used by QML
 
@@ -184,11 +189,11 @@ The current mpv implementation is a good reference implementation of the "browse
 
 ### How the hand-off works
 
-1. **Launch** — `loadAndPlay(url, startSeconds, audioTrack, subTrack, ...)` starts mpv as a `QProcess`. Playback parameters are passed as mpv command-line flags: `--start=<sec>` (resume offset), `--playlist-start=<n>`, `--loop-playlist=inf`, selected audio/subtitle tracks, sidecar subtitle files, optional video filters, optional input bindings, and so on. On macOS, if another display is connected, mpv is launched fullscreen on the first non-main screen by default. `Main.qml` also owns a second-screen QML output layer for pure-QML media and mpv-adjacent overlays, while the primary window stays available as a playback control surface. `HelperResolver` resolves packaged helpers first, then development overrides and `PATH`, and builds a per-process `PATH`; the app never mutates its global environment or links libmpv.
+1. **Launch** — `loadAndPlayWithOptions(url, options)` starts mpv as a `QProcess`; the legacy positional wrapper delegates to it. Named options cover resume, playlists, looping/shuffle, audio/subtitle selection, sidecars, images, filters, input bindings, and authenticated headers without duplicating launch logic across modules. On macOS, if another display is connected, mpv is launched fullscreen on the first non-main screen by default. `Main.qml` also owns a second-screen QML output layer for pure-QML media and mpv-adjacent overlays, while the primary window stays available as a playback control surface. `HelperResolver` resolves packaged helpers first, then development overrides and `PATH`, and builds a per-process `PATH`; the app never mutates its global environment or links libmpv.
 2. **Authenticated HTTP playback** — Jellyfin headers are written to a temporary owner-only mpv include file and passed with `--include=<file>`, so tokens are not exposed as normal command-line header arguments. Jellyfin stream URLs avoid `api_key` query tokens.
 3. **Control channel** — mpv is started with `--input-ipc-server=<socket>` (a Unix domain socket at `/tmp/240-mp-jellyfin-mpv.sock`). `MpvController` connects to it with a `QLocalSocket` and sends JSON commands via `sendCommand(QJsonArray)`. Seeking, key input, video filters, messages, and playlist append/remove/move/clear/play/replace operations go over this channel. mpv client messages using the `240mp-key` prefix are bridged back to QML through `mpvKeyPressed`; `file-loaded` is surfaced separately so overlays can reveal only after the replacement video is ready.
 4. **State back to QML** — `MpvController` issues `observe_property` for `time-pos`, `duration`, and `playlist-pos`, and re-publishes them as `Q_PROPERTY`s + the `positionChanged` / `durationChanged` / `playlistPosChanged` signals. A watchdog timer logs a warning if no `time-pos` event arrives for about 30 s.
-5. **Exit and item outcome** — mpv `end-file` events are surfaced as `playbackItemEnded(playlistIndex, reason, error)`. When mpv quits, `MpvController` emits **`playbackFinished(finalPos, finalDur)`** on a normal exit, or **`playbackFailed()`** on a non-zero exit. Karaoke uses item outcomes to remove completed entries and retain failed entries; Local records resume position from process signals, while Jellyfin currently uses them only to return or show failure.
+5. **Exit and item outcome** — mpv `end-file` events are surfaced as `playbackItemEnded(playlistIndex, reason, error)`. Process completion emits the shared **`playbackEnded(finalPos, finalDur, reason)`** signal with `eof`, `stopped`, or `failed`; compatibility signals remain for hidden/legacy code. Karaoke uses item outcomes to mutate its queue, Local records resume state, and Jellyfin reports the result to the server or retries direct-play failure as a transcode.
 
 ### Bundled helper policy
 
@@ -223,12 +228,20 @@ The Jellyfin module lives in `modules/jellyfin/` and `src/modules/jellyfin/`.
 
 - Auth supports password login and Quick Connect.
 - Auth state is persisted in `jellyfin_auth.json`; passwords are never persisted.
-- User-facing library browsing supports movie libraries and TV show libraries.
+- User-facing library browsing supports movie/TV libraries, Continue Watching, Up Next, collections, and folders.
 - Movie and TV list loading is paged through `/Items` with `limit=250`, typed `includeItemTypes` requests, lightweight list fields, and `enableTotalRecordCount=false`.
 - TV libraries browse `Series` -> `Season` -> `Episode`; episodes reuse the same metadata detail, track selection, and playback flow as movies.
 - Completed lists are cached per parent/type for the current app session and cleared on logout or new authentication.
 - Detail loading fetches heavier fields, including `Overview` and `MediaSources`, only when a playable movie or episode is opened.
-- Stream URLs use `/Videos/{itemId}/stream` with direct/static playback and mpv HTTP headers.
+- Playback calls `/Items/{itemId}/PlaybackInfo`, prefers direct/static playback when selected, supports constrained HLS transcoding, and retries a failed direct launch once through the transcode path.
+- Start/progress/stop state is reported to Jellyfin, and TV playback can automatically request the next aired episode.
+- Audio/subtitle language preferences persist in the private auth-state file; intro/outro skip settings appear only after the server's Media Segments endpoint is probed successfully.
+
+## In-App Updates
+
+`UpdateManager` checks the repository's latest GitHub Release and selects only the Apple Silicon DMG. It streams the download into the app data directory while hashing it, requires GitHub's SHA-256 digest and declared byte size, then verifies the signed/notarized DMG and its app. The nested app must match the current signed app's Team Identifier, `com.240mp.jellyfin`, the release version, and arm64 architecture.
+
+For a signed app in a writable install directory, a small app-generated helper waits for the current process to exit, repeats every integrity and identity check, copies to a temporary sibling, verifies again, swaps atomically with rollback, and relaunches. Development builds and non-writable installs expose the already-verified DMG for manual installation instead.
 
 ## Retro Module
 
@@ -261,7 +274,9 @@ The Tumblr module lives in `modules/tumblr_screensaver/` and `src/modules/tumblr
 
 - Users enter a public Tumblr URL in the module's first view; the URL is persisted through `appCore.save_setting(...)`.
 - `TumblrScreensaverBackend` fetches Tumblr's public JSON feed pages through `/api/read/json`, using `posts-total` and paged `start`/`num` requests to collect the blog.
-- The backend extracts Tumblr-hosted image URLs from post HTML, prefers the largest `srcset` candidate for still images, keeps GIF sources when present, and deduplicates exact image URLs.
+- The backend extracts Tumblr-hosted image URLs from post HTML, prefers the largest `srcset` candidate for still images, explicitly preserves GIF sources (including `.gifv` aliases), marks animated entries, and deduplicates exact image URLs.
+- `Items.qml` persists normalized, duplicate-free favorite blog URLs under `modules.com.240mp.tumblr_screensaver.favorites`; selecting a favorite starts it immediately, while Save/Remove and Delete edit the same list.
+- `TumblrMedia.qml` is the single renderer used by both player slots. It selects `Image` for stills and `AnimatedImage` for GIFs while exposing shared ready/error state to the transition controller; montage pause also pauses GIF frame advancement.
 - `Player.qml` renders a fullscreen QML image montage, shuffling the loaded images so a cycle does not repeat until every image has been shown once.
 - Transitions are handled entirely in QML with retro slide/zoom/fade motion, scanlines, and falling-block effects rather than mpv.
 - Falling-block transitions divide the incoming image into clipped tile regions so the next screen appears on the blocks as they fall.
@@ -468,8 +483,12 @@ User configuration is stored in `config.json` in the app's data directory:
     "com.240mp.jellyfin": { "enabled": true, "resume_playback": "ask", "video_quality": "direct" },
     "com.240mp.karaoke": { "enabled": true },
     "com.240mp.local_files": { "enabled": true, "media_directory": "~/Desktop" },
-    "com.240mp.ambient_mode": { "enabled": false, "media_directory": "~/Desktop" },
-    "com.240mp.tumblr_screensaver": { "enabled": true, "tumblr_url": "https://pixelskylines.tumblr.com/" }
+    "com.240mp.ambient_mode": { "enabled": true, "media_directory": "~/Desktop" },
+    "com.240mp.tumblr_screensaver": {
+      "enabled": true,
+      "tumblr_url": "https://pixelskylines.tumblr.com/",
+      "favorites": ["https://pixelskylines.tumblr.com/"]
+    }
   }
 }
 ```

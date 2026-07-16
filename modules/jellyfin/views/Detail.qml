@@ -27,23 +27,11 @@ FocusScope {
             detailRoot.errorMessage = ""
             detailRoot.audioStreams = d.audioStreams || []
             detailRoot.subtitleStreams = JellyfinMedia.buildSubtitleStreams(d)
-            detailRoot.audioIdx = JellyfinMedia.defaultAudioIndex(detailRoot.audioStreams)
-            detailRoot.subtitleIdx = 0
+            detailRoot.audioIdx = JellyfinMedia.preferredAudioIndex(
+                detailRoot.audioStreams, jellyfinBackend.get_last_audio_language())
+            detailRoot.subtitleIdx = JellyfinMedia.preferredSubtitleIndex(
+                detailRoot.subtitleStreams, jellyfinBackend.get_last_subtitle_language())
             detailRoot.focusRow = 0
-        }
-        function onStreamUrlReady(url, headers) {
-            if (!detailRoot.detail) return
-            detailRoot.navigateTo("Player.qml", {
-                streamUrl: url,
-                httpHeaders: headers,
-                itemId: detailRoot.detail.id,
-                title: JellyfinMedia.playbackTitle(detailRoot.detail),
-                viewOffset: detailRoot.detail.viewOffset || 0,
-                duration: detailRoot.detail.duration || 0,
-                audioTrack: JellyfinMedia.selectedAudioTrack(audioStreams, audioIdx),
-                subtitleTrack: JellyfinMedia.selectedSubtitleTrack(subtitleStreams, subtitleIdx),
-                subtitleFiles: JellyfinMedia.selectedSubtitleFiles(subtitleStreams, subtitleIdx)
-            })
         }
         function onErrorOccurred(message) {
             detailRoot.errorMessage = message
@@ -83,8 +71,23 @@ FocusScope {
             subtitleIdx = (subtitleIdx + 1) % subtitleStreams.length
     }
     Keys.onReturnPressed: {
-        if (focusRow === 0 && detail)
-            jellyfinBackend.build_stream_url(detail.id, detail.mediaSourceId || "")
+        if (focusRow === 0 && detail) {
+            jellyfinBackend.set_last_track_languages(
+                JellyfinMedia.selectedLanguage(audioStreams, audioIdx, ""),
+                JellyfinMedia.selectedLanguage(subtitleStreams, subtitleIdx, "__off__"))
+            detailRoot.navigateTo("Player.qml", {
+                detail: detail,
+                itemId: detail.id,
+                mediaSourceId: detail.mediaSourceId || detail.id,
+                title: JellyfinMedia.playbackTitle(detail),
+                viewOffset: detail.viewOffset || 0,
+                duration: detail.duration || 0,
+                audioStreams: audioStreams,
+                subtitleStreams: subtitleStreams,
+                audioIdx: audioIdx,
+                subtitleIdx: subtitleIdx
+            })
+        }
     }
     Keys.onPressed: function(event) {
         if (event.key === Qt.Key_Escape || event.key === Qt.Key_Backspace || event.key === Qt.Key_Back) {

@@ -251,9 +251,22 @@ FocusScope {
             pendingOutcome = reason === "eof" ? "completed" : "failed"
             pendingError = error || ""
         }
-        function onPlaybackFinished(finalPositionMs, finalDurationMs) {
+        function onPlaybackEnded(finalPositionMs, finalDurationMs, reason) {
             if (leaving)
                 return
+            if (reason === "failed") {
+                if (pendingEndedEntryId === "") {
+                    pendingEndedEntryId = currentEntryId
+                    pendingOutcome = "failed"
+                    pendingError = "mpv could not play this queue"
+                }
+                finalizePendingOutcome(false)
+                if (usingTransitionOutput)
+                    root.closeMediaOutput()
+                playbackErrorVisible = true
+                playbackErrorText = "KARAOKE PLAYBACK FAILED - THE SONG REMAINS IN THE QUEUE"
+                return
+            }
             if (pendingEndedEntryId === "" && currentEntryId !== "") {
                 pendingEndedEntryId = currentEntryId
                 pendingOutcome = "completed"
@@ -262,20 +275,6 @@ FocusScope {
             if (usingTransitionOutput)
                 root.closeMediaOutput()
             goBack()
-        }
-        function onPlaybackFailed() {
-            if (leaving)
-                return
-            if (pendingEndedEntryId === "") {
-                pendingEndedEntryId = currentEntryId
-                pendingOutcome = "failed"
-                pendingError = "mpv could not play this queue"
-            }
-            finalizePendingOutcome(false)
-            if (usingTransitionOutput)
-                root.closeMediaOutput()
-            playbackErrorVisible = true
-            playbackErrorText = "KARAOKE PLAYBACK FAILED - THE SONG REMAINS IN THE QUEUE"
         }
         function onMpvKeyPressed(key) {
             handleCommand(key)

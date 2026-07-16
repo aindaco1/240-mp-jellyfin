@@ -9,6 +9,7 @@
 #include <QUrlQuery>
 #include <QVariantMap>
 #include <QDebug>
+#include <QCoreApplication>
 
 namespace {
 
@@ -143,6 +144,7 @@ QVector<ImageCandidate> imagesFromPhotoFields(const QJsonObject &post)
 {
     QVector<ImageCandidate> result;
     ImageCandidate best;
+    ImageCandidate bestGif;
 
     for (auto it = post.constBegin(); it != post.constEnd(); ++it) {
         const QString key = it.key();
@@ -158,13 +160,19 @@ QVector<ImageCandidate> imagesFromPhotoFields(const QJsonObject &post)
         if (!isSupportedImageUrl(url))
             continue;
 
+        if (isGifUrl(url) && width > bestGif.width) {
+            bestGif.url = url;
+            bestGif.width = width;
+        }
         if (width > best.width) {
             best.url = url;
             best.width = width;
         }
     }
 
-    if (!best.url.isEmpty())
+    if (!bestGif.url.isEmpty())
+        result.append(bestGif);
+    else if (!best.url.isEmpty())
         result.append(best);
 
     const QJsonArray photos = post.value(QStringLiteral("photos")).toArray();
@@ -250,6 +258,14 @@ void TumblrScreensaverBackend::loadImages(const QString &tumblrUrl)
     fetchPage(blogUrl, 0, m_generation);
 }
 
+QString TumblrScreensaverBackend::normalizeBlogUrl(const QString &tumblrUrl) const
+{
+    const QUrl normalized = normalizedBlogUrl(tumblrUrl);
+    return normalized.isValid() && !normalized.host().isEmpty()
+        ? normalized.toString(QUrl::RemoveQuery | QUrl::RemoveFragment)
+        : QString();
+}
+
 QUrl TumblrScreensaverBackend::normalizedBlogUrl(const QString &tumblrUrl) const
 {
     QString input = tumblrUrl.trimmed();
@@ -299,7 +315,9 @@ void TumblrScreensaverBackend::fetchPage(const QUrl &blogUrl, int start, int gen
 {
     QNetworkRequest request(apiUrlForPage(blogUrl, start));
     request.setRawHeader("Accept", "application/json,text/javascript,*/*");
-    request.setRawHeader("User-Agent", "240-mp-jellyfin/1.0");
+    request.setRawHeader("User-Agent",
+                         QStringLiteral("240-mp-jellyfin/%1")
+                             .arg(QCoreApplication::applicationVersion()).toUtf8());
     request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
                          QNetworkRequest::NoLessSafeRedirectPolicy);
 
@@ -391,6 +409,7 @@ QVariantList TumblrScreensaverBackend::imagesFromPost(const QJsonObject &post) c
         image[QStringLiteral("title")] = title;
         image[QStringLiteral("width")] = candidate.width;
         image[QStringLiteral("height")] = candidate.height;
+        image[QStringLiteral("animated")] = isGifUrl(candidate.url);
         result.append(image);
     }
 

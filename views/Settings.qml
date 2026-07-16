@@ -27,15 +27,59 @@ FocusScope {
         var items = []
 
         // APPLICATION section
-        var colorOpts = ["Video 1","Late Night","Synthwave","Terminal","T-120","Amber","Kinescope"]
-        var custom = appCore.getCustomColorScheme()
-        if (Object.keys(custom).length === 5) colorOpts.push("Custom")
+        var colorOpts = Object.keys(root.allThemes)
+        items.push({
+            type: "list_single",
+            key: "startup_module",
+            label: "Start on Module",
+            options: ["None"],
+            values: ["None"],
+            value: "None",
+            description: "Open an enabled module immediately at launch.",
+            moduleId: ""
+        })
+        var startupRow = items[items.length - 1]
+        var startupId = appSettings["startup_module"] || "None"
+        for (var sm = 0; sm < installedModules.length; sm++) {
+            if (!installedModules[sm].enabled) continue
+            startupRow.options.push(installedModules[sm].name)
+            startupRow.values.push(installedModules[sm].id)
+            if (installedModules[sm].id === startupId)
+                startupRow.value = installedModules[sm].name
+        }
         items.push({
             type: "list_single",
             key: "color_scheme",
             label: "Color Scheme",
             options: colorOpts,
             value: appSettings["color_scheme"] || "Video 1",
+            moduleId: ""
+        })
+        items.push({
+            type: "list_single",
+            key: "auto_crop",
+            label: "Auto Crop",
+            options: ["Off", "On"],
+            value: appSettings["auto_crop"] || "Off",
+            description: "Start video zoomed to fill the display; the OSD Crop control still toggles it.",
+            moduleId: ""
+        })
+        items.push({
+            type: "list_single",
+            key: "video_output_levels",
+            label: "Video Levels",
+            options: ["Auto", "Limited", "Full"],
+            value: appSettings["video_output_levels"] || "Auto",
+            description: "Override output range when video looks washed out or crushed.",
+            moduleId: ""
+        })
+        items.push({
+            type: "list_single",
+            key: "screensaver_timeout",
+            label: "Screen Saver",
+            options: ["OFF", "30", "60", "120"],
+            value: appSettings["screensaver_timeout"] || "OFF",
+            description: "Protect the display after menu inactivity or paused playback, in seconds.",
             moduleId: ""
         })
         items.push({
@@ -73,6 +117,7 @@ FocusScope {
 
         // SYSTEM section
         items.push({ type: "section", label: "System:" })
+        items.push({ type: "system_submenu", label: "Software Update", path: "views/Update.qml" })
         items.push({ type: "quit", label: "Quit 240-mp-jellyfin" })
 
         settingsItems = items
@@ -146,12 +191,13 @@ FocusScope {
                 var idx = opts.indexOf(row.value)
                 var newIdx = (idx - 1 + opts.length) % opts.length
                 var newVal = opts[newIdx]
+                var savedVal = row.values ? row.values[newIdx] : newVal
                 var updated = settingsItems.slice()
                 updated[currentIndex] = Object.assign({}, row, { value: newVal })
                 var savedIndex = currentIndex
                 settingsItems = updated
                 currentIndex = savedIndex
-                appCore.save_setting(row.moduleId, row.key, newVal)
+                appCore.save_setting(row.moduleId, row.key, savedVal)
             }
         }
 
@@ -162,12 +208,13 @@ FocusScope {
                 var idx = opts.indexOf(row.value)
                 var newIdx = (idx + 1) % opts.length
                 var newVal = opts[newIdx]
+                var savedVal = row.values ? row.values[newIdx] : newVal
                 var updated = settingsItems.slice()
                 updated[currentIndex] = Object.assign({}, row, { value: newVal })
                 var savedIndex = currentIndex
                 settingsItems = updated
                 currentIndex = savedIndex
-                appCore.save_setting(row.moduleId, row.key, newVal)
+                appCore.save_setting(row.moduleId, row.key, savedVal)
             }
         }
 
@@ -175,6 +222,8 @@ FocusScope {
             var row = settingsItems[currentIndex]
             if (row && row.type === "submenu") {
                 settingsRoot.navigateTo("views/ModuleSettings.qml", { moduleId: row.moduleId }, { currentIndex: settingsList.currentIndex })
+            } else if (row && row.type === "system_submenu") {
+                settingsRoot.navigateTo(row.path, {}, { currentIndex: settingsList.currentIndex })
             } else if (row && row.type === "quit") {
                 settingsRoot.quitChoiceIndex = 0
                 settingsRoot.quitOverlayVisible = true
@@ -258,7 +307,7 @@ FocusScope {
                         font.pixelSize:root.sh * 0.05 //24
                     }
                     Text {
-                        visible: modelData.type === "submenu" || modelData.type === "list_single"
+                        visible: modelData.type === "submenu" || modelData.type === "system_submenu" || modelData.type === "list_single"
                         text: "\u25BA"
                         color: settingsList.currentIndex === index ? root.surfaceColor : root.tertiaryColor
                         font.family: root.globalFont

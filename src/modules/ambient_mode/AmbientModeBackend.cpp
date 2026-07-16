@@ -5,6 +5,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QDebug>
+#include <QTimer>
 
 static const QStringList kVideoExts = {
     "mp4", "mkv", "avi", "mov", "m4v", "webm", "wmv", "flv", "f4v", "mpg", "mpeg", "vob"
@@ -89,9 +90,25 @@ QVariantList AmbientModeBackend::getAudioFiles() const
     return scanFiles(kAudioExts);
 }
 
-void AmbientModeBackend::startAudio(const QString &path)
+void AmbientModeBackend::startAudio(const QStringList &paths, bool shuffle)
 {
     stopAudio();
+
+    if (paths.isEmpty())
+        return;
+
+    m_audioPaths = paths;
+    m_audioShuffle = shuffle;
+    m_audioStopRequested = false;
+    m_audioRespawnCount = 0;
+    ++m_audioGeneration;
+    launchAudioProcess();
+}
+
+void AmbientModeBackend::launchAudioProcess()
+{
+    if (m_audioStopRequested || m_audioPaths.isEmpty())
+        return;
 
     const QString bin = HelperResolver::mpv(m_appRoot);
     if (bin.isEmpty()) {
@@ -100,22 +117,36 @@ void AmbientModeBackend::startAudio(const QString &path)
     }
 
     QStringList args;
-    args << path
+    args << m_audioPaths
          << QStringLiteral("--no-video")
-         << QStringLiteral("--loop-playlist=inf")
-         << QStringLiteral("--no-terminal")
+         << QStringLiteral("--loop-playlist=inf");
+    if (m_audioShuffle)
+        args << QStringLiteral("--shuffle");
+    args << QStringLiteral("--no-terminal")
          << QStringLiteral("--really-quiet");
 
     m_audioProcess = new QProcess(this);
     m_audioProcess->setProcessEnvironment(HelperResolver::processEnvironment(m_appRoot));
+    connect(m_audioProcess, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
+            this, &AmbientModeBackend::onAudioProcessFinished);
+    connect(m_audioProcess, &QProcess::errorOccurred, this,
+            [this](QProcess::ProcessError error) {
+        if (error == QProcess::FailedToStart)
+            onAudioProcessFinished();
+    });
     m_audioProcess->start(bin, args);
-    qDebug("[AmbientMode] audio process started: %s", qPrintable(path));
+    qDebug("[AmbientMode] audio process started: %lld track(s)",
+           static_cast<long long>(m_audioPaths.size()));
 }
 
 void AmbientModeBackend::stopAudio()
 {
+    m_audioStopRequested = true;
+    m_audioRespawnCount = 0;
+    ++m_audioGeneration;
     if (!m_audioProcess)
         return;
+    m_audioProcess->disconnect(this);
     if (m_audioProcess->state() != QProcess::NotRunning) {
         m_audioProcess->terminate();
         m_audioProcess->waitForFinished(1000);
@@ -123,6 +154,33 @@ void AmbientModeBackend::stopAudio()
     m_audioProcess->deleteLater();
     m_audioProcess = nullptr;
     qDebug("[AmbientMode] audio process stopped");
+}
+
+void AmbientModeBackend::onAudioProcessFinished()
+{
+    if (m_audioProcess) {
+        m_audioProcess->disconnect(this);
+        m_audioProcess->deleteLater();
+        m_audioProcess = nullptr;
+    }
+    if (m_audioStopRequested || m_audioPaths.isEmpty())
+        return;
+
+    static constexpr int kMaxRespawns = 5;
+    if (m_audioRespawnCount >= kMaxRespawns) {
+        qWarning("[AmbientMode] separate audio repeatedly failed; giving up until playback restarts");
+        return;
+    }
+
+    ++m_audioRespawnCount;
+    const quint64 generation = m_audioGeneration;
+    const int delayMs = qMin(5000, 500 * (1 << qMin(m_audioRespawnCount - 1, 3)));
+    qWarning("[AmbientMode] separate audio stopped unexpectedly; retrying in %d ms (%d/%d)",
+             delayMs, m_audioRespawnCount, kMaxRespawns);
+    QTimer::singleShot(delayMs, this, [this, generation]() {
+        if (!m_audioStopRequested && generation == m_audioGeneration)
+            launchAudioProcess();
+    });
 }
 
 void AmbientModeBackend::onSettingChanged(const QString &moduleId, const QString &key, const QVariant &value)

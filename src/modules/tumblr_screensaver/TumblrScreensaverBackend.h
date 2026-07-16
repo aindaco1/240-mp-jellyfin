@@ -8,6 +8,7 @@
 
 class QNetworkReply;
 class QJsonObject;
+class TumblrScreensaverBackendTest;
 
 class TumblrScreensaverBackend : public QObject {
     Q_OBJECT
@@ -16,6 +17,7 @@ public:
     explicit TumblrScreensaverBackend(QObject *parent = nullptr);
 
     Q_INVOKABLE void loadImages(const QString &tumblrUrl);
+    Q_INVOKABLE QString normalizeBlogUrl(const QString &tumblrUrl) const;
 
 signals:
     void loadStarted(const QString &sourceUrl);
@@ -24,6 +26,7 @@ signals:
     void errorOccurred(const QString &message);
 
 private:
+    friend class TumblrScreensaverBackendTest;
     QUrl normalizedBlogUrl(const QString &tumblrUrl) const;
     QUrl apiUrlForPage(const QUrl &blogUrl, int start) const;
     void fetchPage(const QUrl &blogUrl, int start, int generation);

@@ -36,9 +36,11 @@ public:
     Q_INVOKABLE void invoke_module_action(const QString &moduleId, const QString &slotName);
     Q_INVOKABLE QVariant get_installed_modules();
     Q_INVOKABLE QVariantMap getCustomColorScheme() const;
+    Q_INVOKABLE QVariantMap getCustomColorSchemes() const;
     Q_INVOKABLE QVariantList listDirectories(const QString &path);
     Q_INVOKABLE QString parentDirectory(const QString &path);
     Q_INVOKABLE QString homePath();
+    Q_INVOKABLE QString startupModuleEntryPoint() const;
     Q_INVOKABLE QString get_module_auth_state(const QString &moduleId);
 
     // Registers a module backend: stores it for action routing, exposes it to QML under
@@ -65,6 +67,8 @@ private:
     QJsonObject loadConfig() const;
     void saveConfig(const QJsonObject &config) const;
     QString moduleIdForBackend(QObject *backend) const;
+    bool isModuleEnabled(const ModuleEntry &module, const QJsonObject &modulesConfig) const;
+    QVariantMap importColorScheme(const QJsonObject &object) const;
 
     QString m_appRoot;
     QString m_dataRoot;

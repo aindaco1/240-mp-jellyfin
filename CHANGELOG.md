@@ -4,6 +4,24 @@ All notable changes to 240-mp-jellyfin are documented here.
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-07-16
+
+### Added
+
+- Kept long Loop video and audio filenames inside their playback selectors with a shared bounded row layout and middle elision that preserves recognizable filename beginnings and extensions.
+- Added animated GIF playback to Tumblr montages through a shared static/animated media component; GIF sources are preserved during feed extraction, pause with the montage, and use transitions that keep animation running.
+- Added a persistent Tumblr favorites list with URL normalization, duplicate suppression, quick launch, Save/Remove Favorite controls, and keyboard deletion. QML list/object settings now serialize through the shared `AppCore` JSON path instead of becoming `null`.
+- Ported the relevant upstream 240-MP core improvements for 1.1 without bringing over new modules or non-macOS platform code: unified mpv completion reporting, native GameController navigation, Right Shift as Back, media-key playback controls, menu/paused-playback screen savers, startup-module selection, multiple custom themes, SMPTE colors, auto-crop, output-level controls, directory reset, and settings help/capability filtering.
+- Added a full Jellyfin TV workflow with Continue Watching and Up Next, series/season/episode browsing, collection and folder traversal, release-date collection sorting, PlaybackInfo negotiation, selectable transcode quality, direct-play failure fallback, playback start/progress/stop reporting, next-episode autoplay, persistent language preferences, and optional intro/outro skip controls when the server supports Media Segments.
+- Added secure in-app update checks and installation from GitHub Releases. Downloads require GitHub's SHA-256 asset digest, a valid notarized Apple disk image and app, the same Developer ID team as the running app, the expected bundle identifier/version, and an Apple Silicon executable; replacement is rollback-safe and manual DMG opening remains available when the app is not installed in a writable location.
+- Added Local image playback, playlist-relative image handling, safer root-contained symlink browsing, forced/preferred subtitle policies, language selection, configurable still-image duration, extension hiding, and an ask-at-playback shuffle mode.
+- Added Loop video/audio shuffle and auto-launch settings plus bounded separate-audio restart recovery, using the shared bundled-helper resolution path.
+- Added app-shell, Local path-policy, and updater version tests alongside the existing Karaoke and Loop suites.
+- Hardened release automation with commit-pinned Actions, least-privilege permissions, tag/version validation, App Store Connect API-key notarization, ephemeral credential cleanup, changelog-derived release notes, SHA-256 assets, and notarization validation for both the app bundle and final disk image.
+- Made Qt's generated MOC include paths reproducible so clean out-of-tree builds also work when macOS resolves the build directory through a symlink such as `/tmp` to `/private/tmp`.
+
+## [1.0] - 2026-06-12
+
 ### Added
 
 - Added a Funbox Karaoke module with automatic 24-hour catalog refresh, progressive live search, a persistent duplicate-friendly queue, easy clear/remove/reorder controls, and a manual refresh setting.
@@ -47,10 +65,6 @@ All notable changes to 240-mp-jellyfin are documented here.
 - Fixed development YouTube playback accidentally falling through to an outdated system yt-dlp; mpv now receives the pinned helper and Deno paths explicitly and ignores conflicting helper configuration.
 - Fixed Loop's separate-audio playback to use the bundled mpv through the shared helper resolver instead of requiring a Homebrew or system mpv on `PATH`.
 - Reduced Karaoke search and queue title sizes so substantially more of each song name remains visible.
-
-## [1.0] - 2026-06-12
-
-### Added
 
 - Added the Jellyfin module as the primary server-backed media integration.
 - Added Jellyfin password login and Quick Connect.

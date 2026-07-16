@@ -14,17 +14,26 @@ public:
     Q_INVOKABLE QVariantList getAudioFiles() const;
     Q_INVOKABLE QString      mediaRoot() const;
     Q_INVOKABLE void         setMediaRoot(const QString &path);
-    Q_INVOKABLE void         startAudio(const QString &path);
+    Q_INVOKABLE void         startAudio(const QStringList &paths, bool shuffle = false);
     Q_INVOKABLE void         stopAudio();
 
 public slots:
     void onSettingChanged(const QString &moduleId, const QString &key, const QVariant &value);
 
+private slots:
+    void onAudioProcessFinished();
+
 private:
     QVariantList scanFiles(const QStringList &extensions) const;
+    void launchAudioProcess();
 
     QString   m_appRoot;
     QString   m_dataRoot;
     QString   m_mediaRoot;
     QProcess *m_audioProcess = nullptr;
+    QStringList m_audioPaths;
+    bool m_audioShuffle = false;
+    bool m_audioStopRequested = true;
+    int m_audioRespawnCount = 0;
+    quint64 m_audioGeneration = 0;
 };

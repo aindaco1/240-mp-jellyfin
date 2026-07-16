@@ -12,7 +12,7 @@ The packaged app bundles `mpv`, `ffmpeg`, `ffprobe`, pinned standalone `yt-dlp`,
 
 ## Install
 
-1. Download the latest `240-mp-jellyfin-<version>-macOS-arm64.dmg` from GitHub Releases.
+1. Download the latest `240-mp-jellyfin-<version>-macOS-arm64.dmg` from [GitHub Releases](https://github.com/aindaco1/240-mp-jellyfin/releases/latest).
 2. Open the DMG.
 3. Drag `240-mp-jellyfin.app` into `/Applications`.
 4. Launch `240-mp-jellyfin.app`.
@@ -21,9 +21,15 @@ The app opens as a full-screen, keyboard-first media interface.
 
 ## Update
 
-1. Download the newer DMG from GitHub Releases.
-2. Open the DMG.
-3. Replace the existing `240-mp-jellyfin.app` in `/Applications`.
+For 1.1 and later, open **Settings → Software Update**, then choose **Check for Updates**. A signed app in a writable Applications folder can download, verify, install, and restart automatically. If the running app is a development build or its install location cannot be replaced safely, the same screen verifies and opens the DMG for manual installation.
+
+The updater rejects releases without GitHub's SHA-256 asset digest. It also requires Apple code-signature and notarization checks, the same Developer ID team as the running app, bundle identifier `com.240mp.jellyfin`, the advertised version, and an Apple Silicon executable.
+
+Manual updating remains supported:
+
+1. Download the newer DMG and its `.sha256` file from GitHub Releases.
+2. Verify the checksum with `shasum -a 256 -c <downloaded-file>.sha256`.
+3. Open the DMG and replace `240-mp-jellyfin.app` in `/Applications`.
 
 Your settings, Jellyfin authentication, Karaoke catalog cache, and Karaoke queue are kept in `~/Library/Application Support/240-mp-jellyfin/`, so replacing the app bundle does not erase them.
 

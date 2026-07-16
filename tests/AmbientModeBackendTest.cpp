@@ -40,7 +40,7 @@ void AmbientModeBackendTest::usesBundledMpvForSeparateAudio()
 
     AmbientModeBackend backend(appRoot, dataRoot);
     const QString audioPath = root.filePath(QStringLiteral("separate audio.flac"));
-    backend.startAudio(audioPath);
+    backend.startAudio({audioPath});
     QTRY_VERIFY_WITH_TIMEOUT(QFile::exists(markerPath), 3000);
     backend.stopAudio();
 

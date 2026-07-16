@@ -78,6 +78,8 @@ On macOS all user configuration is stored at:
   karaoke_queue.m3u8   ← generated canonical playback URLs
 ```
 
+Tumblr's current URL and favorites are ordinary module settings inside `config.json`; no separate database or credential file is used.
+
 This directory is created automatically on first run. It is separate from the app itself, so deleting or rebuilding the app will not wipe your settings.
 
 ## Debugging & logs
@@ -111,23 +113,36 @@ Set them inline, e.g. `QML_IMPORT_TRACE=1 APP_ROOT=$(pwd) ./build/240-mp-jellyfi
 
 ## GitHub Actions
 
+### Release credentials
+
+The release workflow uses encrypted repository Actions secrets and App Store Connect API-key notarization. Configure these names without committing their values:
+
+- `APPLE_CERT_P12_BASE64`: base64-encoded Developer ID Application certificate archive.
+- `APPLE_CERT_PASSWORD`: password for that certificate archive.
+- `APPLE_API_KEY_P8_BASE64`: base64-encoded App Store Connect API private key.
+- `APPLE_API_KEY_ID`: App Store Connect API key ID.
+- `APPLE_API_ISSUER_ID`: App Store Connect API issuer ID.
+
+The workflow writes credentials only under the ephemeral runner temp directory, restricts the API key permissions, and deletes both the temporary keychain and credential files in an `always()` cleanup step. GitHub Actions are pinned to reviewed commit SHAs.
+
 ### How to trigger a build
 
 Releases are built automatically when you push a version tag:
 
 ```bash
-git tag v1.0
-git push origin v1.0
+git tag v1.1.0
+git push origin v1.1.0
 ```
 
 And you can use pre-release tags to test CI without making a public release:
 
 ```bash
-git tag v1.1-rc1
-git push origin v1.1-rc1
+git tag v1.1.0-rc1
+git push origin v1.1.0-rc1
 ```
 
 Tags containing `-rc`, `-beta`, or `-alpha` are published as GitHub pre-releases.
+The numeric portion of the tag must match the version declared in `CMakeLists.txt`; CI rejects mismatched tags before building. Public release notes are generated from that version's section in [CHANGELOG.md](CHANGELOG.md), so finalize the dated changelog entry before tagging.
 
 ### What the workflow does
 
@@ -137,7 +152,9 @@ The intended workflow is a macOS Apple Silicon build:
 |---|---|---|
 | `build-macos-arm64` | `macos-26` (arm64) | `240-mp-jellyfin-<tag>-macOS-arm64.dmg` |
 
-macOS jobs: installs Qt via the Qt CDN, configures CMake for `arm64`, downloads and verifies pinned yt-dlp/Deno, builds and tests, embeds all helpers, runs `macdeployqt`, prunes QML plugins not used by the app, verifies every Mach-O file under a stripped environment (including one live extraction from each Karaoke source), rejects `.DS_Store`, broken symlinks, and external load paths, Developer-ID signs both the app and `.dmg`, then notarizes and staples the disk image.
+macOS jobs: installs Qt via the Qt CDN, configures CMake for `arm64`, downloads and verifies pinned yt-dlp/Deno, builds and tests, embeds all helpers, runs `macdeployqt`, prunes QML plugins not used by the app, verifies every Mach-O file under a stripped environment (including one live extraction from each Karaoke source), rejects `.DS_Store`, broken symlinks, and external load paths, Developer-ID signs the app and `.dmg`, notarizes and staples both, validates Gatekeeper acceptance, and publishes the DMG plus a SHA-256 checksum file.
+
+The in-app updater consumes the same release. GitHub's API asset digest is mandatory, and the downloaded bundle must pass notarization, signature-team, bundle-ID, version, and arm64 checks before installation.
 
 ## Local Verification
 
@@ -169,6 +186,24 @@ cmake --install build --prefix /tmp/240mp-jellyfin-install-test
 ```
 
 After running `macdeployqt`, use `scripts/macos_prune_qt_deployment.zsh` to retain only QML plugins found by `qmlimportscanner`, then run `scripts/macos_verify_bundle.zsh` before signing. The release workflow is the canonical invocation for both scripts.
+
+### Cleaning Generated Artifacts
+
+Preview ignored build output before removing it:
+
+```bash
+git clean -ndX
+```
+
+When the preview contains only disposable generated files, remove them and recreate the single development tree:
+
+```bash
+git clean -fdX
+cmake -B build -DCMAKE_PREFIX_PATH=/opt/homebrew/opt/qt .
+cmake --build build
+```
+
+This retains tracked development scripts, CMake helpers, entitlements, source, and tests while removing old build/package trees, DMGs, logs, caches, and Finder metadata.
 
 When applying hardened-runtime signatures, preserve the bundled Deno binary's
 upstream entitlements. Sign standalone yt-dlp with

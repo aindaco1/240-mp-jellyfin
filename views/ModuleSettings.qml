@@ -16,6 +16,7 @@ FocusScope {
     property var currentValues: ({}) // config.modules[moduleId]
     property var dynamicOptions: ({}) // key -> [{id, label}] loaded from backend
     property string authState: ""
+    property var capabilities: []
 
     function loadSettings() {
         var allSettings = appCore.get_settings()
@@ -31,11 +32,19 @@ FocusScope {
 
     function buildModel() {
         var schema = appCore.get_module_settings_schema(moduleId)
-        authState = appCore.get_module_auth_state(moduleId)
+        var needsAuthState = false
+        for (var n = 0; n < schema.length; n++) {
+            if (schema[n].requires_auth) {
+                needsAuthState = true
+                break
+            }
+        }
+        authState = needsAuthState ? appCore.get_module_auth_state(moduleId) : ""
         var filtered = []
         for (var i = 0; i < schema.length; i++) {
             var item = schema[i]
-            if (item.requires_auth && (authState === "none" || authState === "")) continue
+            if (item.requires_auth && authState !== "authed") continue
+            if (item.requires_capability && capabilities.indexOf(item.requires_capability) < 0) continue
             filtered.push(item)
         }
         schemaItems = filtered
@@ -60,10 +69,9 @@ FocusScope {
         if (type === "list_single") {
             if (item.options_source === "dynamic") {
                 var opts = dynamicOptions[key] || []
-                var storedId = currentValues[key] || null
-                for (var i = 0; i < opts.length; i++) {
-                    if (opts[i].id === storedId) return opts[i].label
-                }
+                var storedId = currentValues[key]
+                var idx = dynamicOptionIndex(opts, storedId)
+                if (idx >= 0) return opts[idx].label
                 return opts.length > 0 ? opts[0].label : "---"
             }
             return currentValues[key] || (item.default || "---")
@@ -77,6 +85,15 @@ FocusScope {
         return ""
     }
 
+    function dynamicOptionIndex(options, storedValue) {
+        for (var i = 0; i < options.length; i++) {
+            if (options[i].id === storedValue ||
+                (options[i].old !== undefined && options[i].old === storedValue))
+                return i
+        }
+        return options.length > 0 ? 0 : -1
+    }
+
     function defaultDirectoryPath(item) {
         var defaultPath = item.default || ""
         if (defaultPath === "~")
@@ -84,6 +101,17 @@ FocusScope {
         if (defaultPath.indexOf("~/") === 0)
             return appCore.homePath() + defaultPath.slice(1)
         return defaultPath !== "" ? defaultPath : appCore.homePath()
+    }
+
+    function probeCapabilitiesIfNeeded() {
+        if (authState !== "authed") return
+        var fullSchema = appCore.get_module_settings_schema(moduleId)
+        for (var i = 0; i < fullSchema.length; i++) {
+            if (fullSchema[i].requires_capability) {
+                appCore.invoke_module_action(moduleId, "probeCapabilities")
+                return
+            }
+        }
     }
 
     function cycleValue(index, direction) {
@@ -103,11 +131,9 @@ FocusScope {
             if (item.options_source === "dynamic") {
                 opts = dynamicOptions[item.key] || []
                 if (opts.length === 0) return
-                var storedId = currentValues[item.key] || null
-                var curIdx = 0
-                for (var i = 0; i < opts.length; i++) {
-                    if (opts[i].id === storedId) { curIdx = i; break }
-                }
+                var storedId = currentValues[item.key]
+                var curIdx = dynamicOptionIndex(opts, storedId)
+                if (curIdx < 0) return
                 var newIdx = (curIdx + direction + opts.length) % opts.length
                 var newId = opts[newIdx].id
                 var u = Object.assign({}, currentValues)
@@ -138,6 +164,11 @@ FocusScope {
         target: appCore
         function onDynamicOptionsReady(mid, key, items) {
             if (mid !== moduleSettingsRoot.moduleId) return
+            if (key === "_capabilities") {
+                moduleSettingsRoot.capabilities = items || []
+                moduleSettingsRoot.buildModel()
+                return
+            }
             var updated = Object.assign({}, moduleSettingsRoot.dynamicOptions)
             updated[key] = items
             moduleSettingsRoot.dynamicOptions = updated
@@ -146,6 +177,7 @@ FocusScope {
         function onModuleAuthStateChanged(mid) {
             if (mid !== moduleSettingsRoot.moduleId) return
             buildModel()
+            probeCapabilitiesIfNeeded()
             for (var i = 0; i < schemaItems.length; i++) {
                 var item = schemaItems[i]
                 if (item.options_source === "dynamic" && item.options_slot) {
@@ -157,6 +189,7 @@ FocusScope {
 
     Component.onCompleted: {
         loadSettings()
+        probeCapabilitiesIfNeeded()
         // Kick off loading dynamic option lists for any dynamic settings
         for (var i = 0; i < schemaItems.length; i++) {
             var item = schemaItems[i]
@@ -327,6 +360,32 @@ FocusScope {
                     }
                 }
             }
+        }
+    }
+
+    Rectangle {
+        id: rowHelpBackground
+        property var currentRow: moduleSettingsRoot.schemaItems[settingsList.currentIndex]
+        visible: !!(currentRow && currentRow.description)
+        color: root.accentColor
+        anchors.bottom: parent.bottom
+        anchors.left: parent.left
+        anchors.bottomMargin: root.sh * 0.1583333
+        anchors.leftMargin: root.sw * 0.125
+        width: root.sw * 0.75
+        height: root.sh * 0.0583333
+        clip: true
+
+        Text {
+            text: (rowHelpBackground.currentRow && rowHelpBackground.currentRow.description) || ""
+            color: root.surfaceColor
+            font.family: root.globalFont
+            font.pixelSize: root.sh * 0.0291667
+            wrapMode: Text.WordWrap
+            anchors.fill: parent
+            anchors.margins: root.sw * 0.0125
+            horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
         }
     }
 

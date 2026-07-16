@@ -84,6 +84,13 @@ Window {
             "tertiary": "#424242",
             "surface": "#121212",
             "accent": "#FFFFFF"
+        },
+        "SMPTE ECR 1-1978": {
+            "primary": "#BFBFBF",
+            "secondary": "#66BF66",
+            "tertiary": "#6666BF",
+            "surface": "#131313",
+            "accent": "#BF6666"
         }
     })
     property var allThemes: themes  // may gain a "Custom" entry on startup
@@ -96,20 +103,38 @@ Window {
 
     readonly property real sw: width
     readonly property real sh: height
+    readonly property var hints: inputManager.hints
 
     Connections {
         target: appCore
         function onAppSettingChanged(key, value) {
-            if (key === "color_scheme") root.currentTheme = value
+            if (key === "color_scheme") {
+                root.currentTheme = value
+            } else if (key === "screensaver_timeout") {
+                var seconds = parseInt(value)
+                idleTracker.enabled = seconds > 0
+                if (seconds > 0) idleTracker.threshold = seconds
+                if (!(seconds > 0)) root.screenSaverActive = false
+            }
         }
     }
 
     Component.onCompleted: {
         var cfg = appCore.get_settings()
 
+        var customThemes = appCore.getCustomColorSchemes()
+        if (Object.keys(customThemes).length > 0) {
+            var mergedThemes = Object.assign({}, themes, root.allThemes)
+            for (var customName in customThemes) {
+                if (Object.keys(customThemes[customName]).length === 5)
+                    mergedThemes[customName] = customThemes[customName]
+            }
+            root.allThemes = mergedThemes
+        }
+
         var custom = appCore.getCustomColorScheme()
         if (Object.keys(custom).length === 5) {
-            var t = Object.assign({}, themes)
+            var t = Object.assign({}, root.allThemes)
             t["Custom"] = custom
             root.allThemes = t
         }
@@ -120,6 +145,10 @@ Window {
             savedTheme = "Video 1"
         }
         root.currentTheme = savedTheme
+
+        var screenSaverSeconds = parseInt(cfg.app && cfg.app.screensaver_timeout)
+        idleTracker.enabled = screenSaverSeconds > 0
+        if (screenSaverSeconds > 0) idleTracker.threshold = screenSaverSeconds
 
         // Break declarative bindings on macOS so the C++ NSWindow override
         // in forceWindowFullScreen() isn't immediately re-fought by QML.
@@ -139,6 +168,35 @@ Window {
     // --- APP-LEVEL NAV STACK ---
     property var appNavStack: []
     property var appCurrentParams: ({})
+    property bool startupNavigated: false
+    property bool screenSaverActive: false
+
+    Connections {
+        target: mpvController
+        function onPositionChanged(ms) {
+            if (ms > 0 && !idleTracker.mpvActive)
+                idleTracker.mpvActive = true
+        }
+        function onPlaybackEnded(finalPositionMs, finalDurationMs, reason) {
+            idleTracker.mpvActive = false
+        }
+    }
+
+    Connections {
+        target: idleTracker
+        function onActiveChanged() {
+            if (idleTracker.active && idleTracker.enabled) {
+                root.screenSaverActive = true
+                var maxX = Math.max(1, screenSaverOverlay.width - bounceLogo.width)
+                var maxY = Math.max(1, screenSaverOverlay.height - bounceLogo.height)
+                bounceLogo.x = Math.random() * maxX
+                bounceLogo.y = Math.random() * maxY
+                bounceLogo.vx = Math.random() > 0.5 ? 2 : -2
+                bounceLogo.vy = Math.random() > 0.5 ? 2 : -2
+                screenSaverOverlay.forceActiveFocus()
+            }
+        }
+    }
 
     // --- MODULE LOADER ---
     Loader {
@@ -153,7 +211,17 @@ Window {
             }
         }
 
-        onLoaded: item.forceActiveFocus()
+        onLoaded: {
+            item.forceActiveFocus()
+            if (!root.startupNavigated) {
+                root.startupNavigated = true
+                var startupEntry = appCore.startupModuleEntryPoint()
+                if (startupEntry) {
+                    root.appNavStack.push({ source: moduleLoader.source, params: {}, listState: {} })
+                    moduleLoader.setSource(startupEntry, { "navParams": {} })
+                }
+            }
+        }
 
         Connections {
             target: moduleLoader.item
@@ -172,6 +240,59 @@ Window {
                 moduleLoader.setSource(prev.source, { "navParams": prev.params, "navListState": prev.listState || {} })
             }
 
+        }
+    }
+
+    Item {
+        id: screenSaverOverlay
+        anchors.fill: parent
+        visible: root.screenSaverActive
+        focus: visible
+        z: 9999
+
+        Rectangle { anchors.fill: parent; color: "black" }
+
+        Image {
+            id: bounceLogo
+            source: "assets/images/logo.svg"
+            width: root.sw * 0.1
+            height: width * 0.55
+            fillMode: Image.PreserveAspectFit
+            property real vx: 2
+            property real vy: 2
+
+            Timer {
+                interval: 16
+                repeat: true
+                running: root.screenSaverActive
+                onTriggered: {
+                    bounceLogo.x += bounceLogo.vx
+                    bounceLogo.y += bounceLogo.vy
+                    if (bounceLogo.x + bounceLogo.width >= screenSaverOverlay.width) {
+                        bounceLogo.x = screenSaverOverlay.width - bounceLogo.width
+                        bounceLogo.vx = -Math.abs(bounceLogo.vx)
+                    } else if (bounceLogo.x <= 0) {
+                        bounceLogo.x = 0; bounceLogo.vx = Math.abs(bounceLogo.vx)
+                    }
+                    if (bounceLogo.y + bounceLogo.height >= screenSaverOverlay.height) {
+                        bounceLogo.y = screenSaverOverlay.height - bounceLogo.height
+                        bounceLogo.vy = -Math.abs(bounceLogo.vy)
+                    } else if (bounceLogo.y <= 0) {
+                        bounceLogo.y = 0; bounceLogo.vy = Math.abs(bounceLogo.vy)
+                    }
+                }
+            }
+        }
+
+        Keys.onPressed: function(event) {
+            event.accepted = true
+            if ((event.modifiers & Qt.ControlModifier) && event.key === Qt.Key_Q) {
+                Qt.quit()
+                return
+            }
+            root.screenSaverActive = false
+            idleTracker.resetActivity()
+            moduleLoader.forceActiveFocus()
         }
     }
 

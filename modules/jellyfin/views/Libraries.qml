@@ -16,25 +16,35 @@ FocusScope {
     property string errorMessage: ""
 
     function browseParamsForLibrary(lib) {
+        if (lib.id === "__continue__")
+            return { mode: "continue", libraryName: "Continue Watching" }
+        if (lib.id === "__upnext__")
+            return { mode: "upnext", libraryName: "Up Next" }
         var collectionType = String(lib.collectionType || "").toLowerCase()
-        var itemType = collectionType === "tvshows" ? "Series" : "Movie"
+        var itemType = collectionType === "tvshows" ? "Series"
+                     : collectionType === "boxsets" ? "BoxSet" : "Movie"
         return {
             parentId: lib.id,
             libraryId: lib.id,
             libraryName: lib.title,
             collectionType: collectionType,
             itemType: itemType,
-            recursive: true
+            recursive: collectionType !== "boxsets",
+            mode: collectionType === "homevideos" ? "folder" : "browse"
         }
     }
 
     Connections {
         target: jellyfinBackend
         function onLibrariesLoaded(items) {
-            browseRoot.libraries = items
-            if (items.length > 0) {
+            var combined = [
+                { id: "__continue__", title: "Continue Watching", collectionType: "" },
+                { id: "__upnext__", title: "Up Next", collectionType: "" }
+            ].concat(items)
+            browseRoot.libraries = combined
+            if (combined.length > 0) {
                 var restore = (navListState.currentIndex !== undefined) ? navListState.currentIndex : 0
-                libraryList.currentIndex = Math.min(restore, items.length - 1)
+                libraryList.currentIndex = Math.min(restore, combined.length - 1)
                 libraryList.positionViewAtIndex(libraryList.currentIndex, ListView.Contain)
             }
         }

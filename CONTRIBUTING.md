@@ -22,7 +22,7 @@
 - `jellyfin` is the primary server module.
 - `karaoke` (Karaoke), `retro_tv` (Retro), `tumblr_screensaver` (Tumblr), `local_files` (Local), and `ambient_mode` (Loop) stay user-facing.
 - `plex` remains hidden as a reference until Jellyfin has enough parity to remove it.
-- Jellyfin currently targets movie libraries and direct play first.
+- Jellyfin supports movies and full TV browsing/playback, including negotiated direct play/transcoding, progress reporting, next-episode autoplay, remembered track languages, and capability-gated segment skipping.
 
 ## Adding Or Changing A Module
 
@@ -57,14 +57,14 @@ Manual checks for media changes:
 
 - Build and run the app on Apple Silicon macOS.
 - Navigate without a mouse.
-- Confirm Jellyfin login, library loading, filtering, detail loading, and playback.
+- Confirm Jellyfin login, Continue Watching/Up Next, movie and TV library traversal, filtering, detail loading, track selection, direct playback, transcode fallback, progress reporting, and next-episode behavior.
 - Confirm Retro feed loading, channel surfing, filtering, static transitions, and mpv playback.
 - Confirm Karaoke automatic/manual catalog refresh, live filtering, duplicate adds, persistence, reorder/move mode, clear confirmation, external-display playback, live queue edits, completed removal, and failed retention.
 - Confirm Local browsing, track probing, sidecar subtitle discovery, and playback.
-- Confirm Loop media directory display and looping playback.
-- Confirm Tumblr URL loading, shuffled non-repeating image playback, and 90s-style transitions.
+- Confirm Loop media directory display, long filename selectors, separate audio, shuffle/auto-launch, and looping playback.
+- Confirm Tumblr URL loading, favorites persistence/editing, shuffled non-repeating still/GIF playback, pause/resume, and 90s-style transitions.
 - Confirm app settings persist after restart.
-- For packaging changes, run `cmake --install` into a temporary prefix and verify bundled `mpv`, `ffprobe`, `yt-dlp`, and Deno launch with a stripped `PATH`.
+- For packaging changes, run `cmake --install` into a temporary prefix and verify bundled `mpv`, `ffmpeg`, `ffprobe`, `yt-dlp`, and Deno launch with a stripped `PATH`.
 
 ## AI Use
 

@@ -16,14 +16,14 @@ FocusScope {
     property int focusRow: 0
     property int audioIdx: 0
     property int subtitleIdx: 0
+    property bool subtitleTouched: false
 
     function isPlaylist(path) {
-        var lower = path.toLowerCase()
-        return lower.endsWith(".m3u") || lower.endsWith(".m3u8")
+        return localFilesBackend.isPlaylist(path)
     }
 
     function loadTracks() {
-        if (filePath === "" || isPlaylist(filePath))
+        if (filePath === "" || isPlaylist(filePath) || localFilesBackend.isImage(filePath))
             return
 
         var tracks = localFilesBackend.probeMediaTracks(filePath)
@@ -79,7 +79,8 @@ FocusScope {
             title: itemTitle,
             audioTrack: selectedAudioTrack(),
             subtitleTrack: selectedSubtitleTrack(),
-            subtitleFiles: selectedSubtitleFiles()
+            subtitleFiles: selectedSubtitleFiles(),
+            subtitleExplicit: subtitleTouched
         })
     }
 
@@ -102,14 +103,18 @@ FocusScope {
     Keys.onLeftPressed: {
         if (focusRow === 1 && audioStreams.length > 1)
             audioIdx = (audioIdx - 1 + audioStreams.length) % audioStreams.length
-        else if (focusRow === 2 && subtitleStreams.length > 1)
+        else if (focusRow === 2 && subtitleStreams.length > 1) {
             subtitleIdx = (subtitleIdx - 1 + subtitleStreams.length) % subtitleStreams.length
+            subtitleTouched = true
+        }
     }
     Keys.onRightPressed: {
         if (focusRow === 1 && audioStreams.length > 1)
             audioIdx = (audioIdx + 1) % audioStreams.length
-        else if (focusRow === 2 && subtitleStreams.length > 1)
+        else if (focusRow === 2 && subtitleStreams.length > 1) {
             subtitleIdx = (subtitleIdx + 1) % subtitleStreams.length
+            subtitleTouched = true
+        }
     }
     Keys.onReturnPressed: playSelected()
     Keys.onPressed: function(event) {
@@ -175,7 +180,9 @@ FocusScope {
                 }
 
                 Text {
-                    text: isPlaylist(filePath) ? "PLAYLIST" : "LOCAL MEDIA"
+                    text: isPlaylist(filePath) ? "PLAYLIST"
+                          : localFilesBackend.isImage(filePath) ? "IMAGE"
+                          : "LOCAL MEDIA"
                     color: root.secondaryColor
                     font.family: root.globalFont
                     font.capitalization: Font.AllUppercase

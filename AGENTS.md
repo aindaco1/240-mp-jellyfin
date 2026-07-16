@@ -49,4 +49,7 @@ For packaging, CI, and config paths, see **[BUILDING.md](BUILDING.md)** and **[I
 - Config is `config.json` under `~/Library/Application Support/240-mp-jellyfin/`.
 - Jellyfin auth is `jellyfin_auth.json`; passwords are never persisted.
 - Karaoke stores a non-secret 24-hour catalog cache, persistent queue, and generated playback playlist under the same app data directory.
+- Tumblr stores its current URL and normalized favorites list in `config.json`; GIFs use the shared `TumblrMedia.qml` static/animated renderer.
+- Signed releases update through `UpdateManager`; never weaken its SHA-256, notarization, Developer ID team, bundle ID, version, or arm64 checks.
+- Jellyfin TV playback negotiates PlaybackInfo, reports session progress, can retry through transcoding, and optionally uses server Media Segments for intro/outro skipping.
 - Do not log tokens, passwords, full auth headers, or token-bearing URLs.

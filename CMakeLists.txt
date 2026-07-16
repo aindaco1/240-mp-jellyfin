@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(240mp VERSION 1.0 LANGUAGES CXX)
+project(240mp VERSION 1.1.0 LANGUAGES CXX)
 
 if(NOT APPLE)
     message(FATAL_ERROR "This fork is macOS-only. Configure and build it on macOS.")
@@ -8,7 +8,14 @@ endif()
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
+# Keep generated moc includes relative to declared include directories. Besides
+# making moc output reproducible, this avoids broken paths when the build tree
+# is reached through a symlink such as macOS's /tmp -> /private/tmp.
+set(CMAKE_AUTOMOC_PATH_PREFIX ON)
 set(APP_DISPLAY_NAME "240-mp-jellyfin")
+set(APP_BUNDLE_IDENTIFIER "com.240mp.jellyfin" CACHE STRING "macOS bundle identifier")
+set(APP_UPDATE_REPOSITORY "aindaco1/240-mp-jellyfin" CACHE STRING "GitHub update repository")
+set(APP_UPDATE_TEAM_ID "PWT3Q52LZ2" CACHE STRING "Expected Developer ID team for updates")
 
 include(GNUInstallDirs)
 include(CTest)
@@ -53,8 +60,19 @@ add_executable(240mp
     src/modules/ambient_mode/AmbientModeBackend.cpp
     src/modules/tumblr_screensaver/TumblrScreensaverBackend.cpp
     src/player/MpvController.cpp
+    src/input/IdleTracker.cpp
+    src/input/InputManager.mm
+    src/update/UpdateManager.cpp
     src/tools/HelperResolver.cpp
     src/macos_utils.mm
+)
+
+add_library(app_build_config INTERFACE)
+target_compile_definitions(app_build_config INTERFACE
+    APP_VERSION="${PROJECT_VERSION}"
+    APP_BUNDLE_IDENTIFIER="${APP_BUNDLE_IDENTIFIER}"
+    APP_UPDATE_REPOSITORY="${APP_UPDATE_REPOSITORY}"
+    APP_UPDATE_TEAM_ID="${APP_UPDATE_TEAM_ID}"
 )
 
 target_compile_definitions(240mp PRIVATE
@@ -64,6 +82,7 @@ target_compile_definitions(240mp PRIVATE
 )
 
 target_link_libraries(240mp PRIVATE
+    app_build_config
     Qt6::Core
     Qt6::Gui
     Qt6::Quick
@@ -73,6 +92,7 @@ target_link_libraries(240mp PRIVATE
     OpenSSL::Crypto
     "-framework AppKit"
     "-framework IOKit"
+    "-framework GameController"
 )
 
 target_include_directories(240mp PRIVATE
@@ -81,6 +101,15 @@ target_include_directories(240mp PRIVATE
 
 if(BUILD_TESTING)
     find_package(Qt6 REQUIRED COMPONENTS Test)
+
+    add_executable(app_core_tests
+        tests/AppCoreTest.cpp
+        src/AppCore.cpp
+    )
+    target_include_directories(app_core_tests PRIVATE src)
+    target_link_libraries(app_core_tests PRIVATE Qt6::Core Qt6::Qml Qt6::Test)
+    add_test(NAME app_core COMMAND app_core_tests)
+
     add_executable(karaoke_backend_tests
         tests/KaraokeBackendTest.cpp
         src/modules/karaoke/KaraokeBackend.cpp
@@ -103,6 +132,57 @@ if(BUILD_TESTING)
     target_include_directories(ambient_mode_backend_tests PRIVATE src)
     target_link_libraries(ambient_mode_backend_tests PRIVATE Qt6::Core Qt6::Test)
     add_test(NAME ambient_mode_backend COMMAND ambient_mode_backend_tests)
+
+    add_executable(ambient_mode_qml_tests
+        tests/AmbientModeQmlTest.cpp
+    )
+    target_compile_definitions(ambient_mode_qml_tests PRIVATE
+        TEST_SOURCE_ROOT="${CMAKE_SOURCE_DIR}"
+    )
+    target_link_libraries(ambient_mode_qml_tests PRIVATE Qt6::Core Qt6::Gui Qt6::Quick Qt6::Qml Qt6::Test)
+    add_test(NAME ambient_mode_qml COMMAND ambient_mode_qml_tests)
+
+    add_executable(local_files_backend_tests
+        tests/LocalFilesBackendTest.cpp
+        src/modules/local_files/LocalFilesBackend.cpp
+        src/tools/HelperResolver.cpp
+    )
+    target_include_directories(local_files_backend_tests PRIVATE src)
+    target_link_libraries(local_files_backend_tests PRIVATE Qt6::Core Qt6::Test)
+    add_test(NAME local_files_backend COMMAND local_files_backend_tests)
+
+    add_executable(update_manager_tests
+        tests/UpdateManagerTest.cpp
+        src/update/UpdateManager.cpp
+    )
+    target_include_directories(update_manager_tests PRIVATE src)
+    target_link_libraries(update_manager_tests PRIVATE app_build_config Qt6::Core Qt6::Gui Qt6::Network Qt6::Test)
+    add_test(NAME update_manager COMMAND update_manager_tests)
+
+    add_executable(jellyfin_backend_tests
+        tests/JellyfinBackendTest.cpp
+        src/modules/jellyfin/JellyfinBackend.cpp
+    )
+    target_include_directories(jellyfin_backend_tests PRIVATE src)
+    target_link_libraries(jellyfin_backend_tests PRIVATE Qt6::Core Qt6::Network Qt6::Test)
+    add_test(NAME jellyfin_backend COMMAND jellyfin_backend_tests)
+
+    add_executable(tumblr_screensaver_backend_tests
+        tests/TumblrScreensaverBackendTest.cpp
+        src/modules/tumblr_screensaver/TumblrScreensaverBackend.cpp
+    )
+    target_include_directories(tumblr_screensaver_backend_tests PRIVATE src)
+    target_link_libraries(tumblr_screensaver_backend_tests PRIVATE Qt6::Core Qt6::Network Qt6::Test)
+    add_test(NAME tumblr_screensaver_backend COMMAND tumblr_screensaver_backend_tests)
+
+    add_executable(tumblr_media_qml_tests
+        tests/TumblrMediaQmlTest.cpp
+    )
+    target_compile_definitions(tumblr_media_qml_tests PRIVATE
+        TEST_SOURCE_ROOT="${CMAKE_SOURCE_DIR}"
+    )
+    target_link_libraries(tumblr_media_qml_tests PRIVATE Qt6::Core Qt6::Gui Qt6::Quick Qt6::Qml Qt6::Test)
+    add_test(NAME tumblr_media_qml COMMAND tumblr_media_qml_tests)
 endif()
 
 # ── macOS bundle metadata ──────────────────────────────────────────────────────
@@ -112,7 +192,7 @@ set_target_properties(240mp PROPERTIES
     MACOSX_BUNDLE_BUNDLE_NAME "${APP_DISPLAY_NAME}"
     MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
     MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
-    MACOSX_BUNDLE_GUI_IDENTIFIER "com.240mp.jellyfin"
+    MACOSX_BUNDLE_GUI_IDENTIFIER "${APP_BUNDLE_IDENTIFIER}"
     MACOSX_BUNDLE_ICON_FILE "assets/images/240-mp"
     INSTALL_RPATH_USE_LINK_PATH TRUE
 )
@@ -163,7 +243,9 @@ install(DIRECTORY
 
 install(FILES
     "${CMAKE_SOURCE_DIR}/scripts/ambient-osc.lua"
+    "${CMAKE_SOURCE_DIR}/scripts/media-keys.lua"
     "${CMAKE_SOURCE_DIR}/scripts/mpv-osc.lua"
+    "${CMAKE_SOURCE_DIR}/scripts/screensaver.lua"
     DESTINATION "${APP_DISPLAY_NAME}.app/Contents/Resources/scripts"
     COMPONENT Runtime)
 
