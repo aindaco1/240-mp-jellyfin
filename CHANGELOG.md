@@ -6,6 +6,14 @@ All notable changes to 240-mp-jellyfin are documented here.
 
 ### Added
 
+- Ported the relevant upstream 240-MP core improvements for 1.1 without bringing over new modules or non-macOS platform code: unified mpv completion reporting, native GameController navigation, Right Shift as Back, media-key playback controls, menu/paused-playback screen savers, startup-module selection, multiple custom themes, SMPTE colors, auto-crop, output-level controls, directory reset, and settings help/capability filtering.
+- Added a full Jellyfin TV workflow with Continue Watching and Up Next, series/season/episode browsing, collection and folder traversal, release-date collection sorting, PlaybackInfo negotiation, selectable transcode quality, direct-play failure fallback, playback start/progress/stop reporting, next-episode autoplay, persistent language preferences, and optional intro/outro skip controls when the server supports Media Segments.
+- Added secure in-app update checks and installation from GitHub Releases. Downloads require GitHub's SHA-256 asset digest, a valid notarized Apple disk image and app, the same Developer ID team as the running app, the expected bundle identifier/version, and an Apple Silicon executable; replacement is rollback-safe and manual DMG opening remains available when the app is not installed in a writable location.
+- Added Local image playback, playlist-relative image handling, safer root-contained symlink browsing, forced/preferred subtitle policies, language selection, configurable still-image duration, extension hiding, and an ask-at-playback shuffle mode.
+- Added Loop video/audio shuffle and auto-launch settings plus bounded separate-audio restart recovery, using the shared bundled-helper resolution path.
+- Added app-shell, Local path-policy, and updater version tests alongside the existing Karaoke and Loop suites.
+- Added SHA-256 checksum assets to the notarized release workflow and notarization validation for both the app bundle and final disk image.
+
 - Added a Funbox Karaoke module with automatic 24-hour catalog refresh, progressive live search, a persistent duplicate-friendly queue, easy clear/remove/reorder controls, and a manual refresh setting.
 - Added KaraokeNerds, Peareoke, CCKaraokeX, and ObsKure as additional Karaoke catalog sources, including source-specific title cleanup and ranked cross-source deduplication (Funbox, KaraokeNerds, Peareoke, CCKaraokeX, ObsKure) that tolerates case, accents, punctuation, and missing articles.
 - Added Lemmy Caution Karaoke plus 1Music Karaoke, Janet Email Karaoke, and Couch Potato Karaoke, expanding the catalog to nine sources with source-specific cleanup and automatic legacy-cache migration.

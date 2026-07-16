@@ -23,11 +23,16 @@ The home screen order is Jellyfin, Karaoke, Retro, Tumblr, Local, then Loop.
 - Live title filter narrows the list as you type.
 - Accent-insensitive filtering, so names with characters like `e` and `é` match naturally.
 - Direct-play movie and episode playback through mpv.
+- Continue Watching and Up Next rows.
+- Collection and ordinary folder browsing, with collection items sorted by release date.
+- Jellyfin PlaybackInfo negotiation with direct play, direct stream, configurable 480p–1080p transcoding, and automatic transcode retry when direct playback fails.
+- Playback start, progress, stop, and completion reporting back to Jellyfin.
+- Optional next-episode autoplay and server-capability-gated intro/outro skip modes.
 - Resume prompt based on Jellyfin playback position.
-- Audio and subtitle selection before movie and episode playback.
+- Audio and subtitle selection before movie and episode playback, with language preferences remembered across items.
 - External Jellyfin subtitle URLs are loaded through authenticated mpv requests without putting access tokens in media URLs.
 
-Not yet implemented: music libraries, Continue Watching hubs, playback progress reporting back to Jellyfin, watched-state updates, and transcoding fallback.
+Not yet implemented: music libraries and explicit watched/unwatched controls from the detail screen.
 
 ### Karaoke
 
@@ -60,11 +65,16 @@ Not yet implemented: music libraries, Continue Watching hubs, playback progress 
 - Resume history.
 - Audio and subtitle selection before playback.
 - Sidecar subtitle discovery for common subtitle formats.
+- Still-image playback in folders and playlists, configurable image duration, and extension hiding.
+- Automatic subtitle policies for preferred language, forced-only, on, or off.
+- Shuffle can be fixed on/off or chosen when playback starts.
 
 ### Loop
 
 - Looping background video playback.
 - Optional separate audio playlist.
+- Independent video/audio shuffle and optional auto-launch.
+- Bounded restart recovery if the separate-audio process exits unexpectedly.
 - The first view shows the active media directory, defaulting to `~/Desktop`.
 - Kept from the original project as a first-class module.
 
@@ -95,6 +105,8 @@ APP_ROOT=$(pwd) ./build/240-mp-jellyfin.app/Contents/MacOS/240-mp-jellyfin
 ## Install
 
 See [INSTALL.md](INSTALL.md). The release artifact is a macOS Apple Silicon DMG containing `240-mp-jellyfin.app`.
+
+Signed releases can check, download, verify, and install later versions from **Settings → Software Update**. The updater verifies GitHub's SHA-256 digest, Apple notarization, the Developer ID team, bundle identity, version, and Apple Silicon architecture before replacing the app.
 
 ## Project Docs
 

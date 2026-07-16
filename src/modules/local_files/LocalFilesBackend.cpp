@@ -8,10 +8,17 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QProcess>
+#include <QLocale>
 
-static const QStringList kMediaExts = {
-    "mp4", "mkv", "avi", "mov", "m4v", "webm", "wmv", "flv", "f4v", "mpg", "mpeg", "vob", "m3u", "m3u8"
+static const QStringList kImageExts = {
+    "jpg", "jpeg", "png", "gif", "webp", "bmp", "tif", "tiff"
 };
+
+static const QStringList kPlaylistExts = {"m3u", "m3u8"};
+
+static const QStringList kMediaExts =
+    QStringList{"mp4", "mkv", "avi", "mov", "m4v", "webm", "wmv", "flv", "f4v", "mpg", "mpeg", "vob"}
+    + kImageExts + kPlaylistExts;
 
 static const QStringList kSidecarSubtitleExts = {
     "srt", "ass", "ssa", "sub", "vtt", "smi"
@@ -92,6 +99,39 @@ LocalFilesBackend::LocalFilesBackend(const QString &appRoot, const QString &data
     }
 }
 
+bool LocalFilesBackend::isImage(const QString &path) const {
+    return kImageExts.contains(QFileInfo(path).suffix().toLower());
+}
+
+bool LocalFilesBackend::isPlaylist(const QString &path) const {
+    return kPlaylistExts.contains(QFileInfo(path).suffix().toLower());
+}
+
+bool LocalFilesBackend::isPathWithinMediaRoot(const QString &path) const {
+    const QString clean = QDir::cleanPath(QFileInfo(path).absoluteFilePath());
+    const QString root = QDir::cleanPath(QFileInfo(m_mediaRoot).absoluteFilePath());
+    return clean == root || clean.startsWith(root + QLatin1Char('/'));
+}
+
+bool LocalFilesBackend::playlistContainsImages(const QString &path) const {
+    if (!isPlaylist(path) || !isPathWithinMediaRoot(path))
+        return false;
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
+        return false;
+    const QDir playlistDir = QFileInfo(path).absoluteDir();
+    while (!file.atEnd()) {
+        const QString entry = QString::fromUtf8(file.readLine()).trimmed();
+        if (entry.isEmpty() || entry.startsWith(QLatin1Char('#')))
+            continue;
+        const QString resolved = QFileInfo(entry).isAbsolute()
+            ? entry : playlistDir.absoluteFilePath(entry);
+        if (isImage(resolved))
+            return true;
+    }
+    return false;
+}
+
 QString LocalFilesBackend::historyFilePath() const {
     return m_dataRoot + "/local_files_history.json";
 }
@@ -146,10 +186,7 @@ QVariantMap LocalFilesBackend::probeMediaTracks(const QString &filePath) {
     result["subtitleStreams"] = subtitleStreams;
 
     const QFileInfo mediaInfo(filePath);
-    const QString canonicalFile = mediaInfo.canonicalFilePath();
-    const QString canonicalRoot = QDir(m_mediaRoot).canonicalPath();
-    if (canonicalFile.isEmpty() || canonicalRoot.isEmpty() ||
-        (canonicalFile != canonicalRoot && !canonicalFile.startsWith(canonicalRoot + "/"))) {
+    if (!mediaInfo.exists() || !isPathWithinMediaRoot(filePath)) {
         qWarning("[LocalFiles] track probe path escapes media root: %s", qPrintable(filePath));
         return result;
     }
@@ -246,6 +283,47 @@ void LocalFilesBackend::get_resume_playback_options() {
     emit dynamicOptionsReady("resume_playback", options);
 }
 
+void LocalFilesBackend::get_shuffle_playback_options() {
+    QVariantList options;
+    options << QVariantMap{{"id", "ask"}, {"label", "Ask"}}
+            << QVariantMap{{"id", "yes"}, {"label", "Always"}, {"old", true}}
+            << QVariantMap{{"id", "no"}, {"label", "Never"}, {"old", false}};
+    emit dynamicOptionsReady("shuffle_playback", options);
+}
+
+void LocalFilesBackend::get_auto_subtitles_options() {
+    QVariantList options;
+    options << QVariantMap{{"id", "forced"}, {"label", "Forced Only"}, {"old", false}}
+            << QVariantMap{{"id", "on"}, {"label", "On"}, {"old", true}}
+            << QVariantMap{{"id", "off"}, {"label", "Off"}};
+    emit dynamicOptionsReady("auto_subtitles", options);
+}
+
+void LocalFilesBackend::get_subtitle_languages() {
+    QVariantList options{QVariantMap{{"id", "-"}, {"label", "Any"}}};
+    QMap<QString, QString> labelsByCode;
+    const QList<QLocale> locales = QLocale::matchingLocales(
+        QLocale::AnyLanguage, QLocale::AnyScript, QLocale::AnyTerritory);
+    for (const QLocale &locale : locales) {
+        const QString code = QLocale::languageToCode(locale.language(), QLocale::ISO639Part1);
+        const QString label = QLocale::languageToString(locale.language());
+        if (code.size() == 2 && !label.isEmpty() && !labelsByCode.contains(code))
+            labelsByCode.insert(code, label);
+    }
+    for (auto it = labelsByCode.cbegin(); it != labelsByCode.cend(); ++it)
+        options << QVariantMap{{"id", it.key()}, {"label", it.value()}};
+    emit dynamicOptionsReady("sub_lang", options);
+}
+
+void LocalFilesBackend::get_image_duration_options() {
+    QVariantList options;
+    for (const int seconds : {5, 10, 30, 60}) {
+        options << QVariantMap{{"id", QString::number(seconds)},
+                               {"label", QString("%1 Seconds").arg(seconds)}};
+    }
+    emit dynamicOptionsReady("image_duration", options);
+}
+
 QString LocalFilesBackend::mediaRoot() const {
     return m_mediaRoot;
 }
@@ -268,17 +346,13 @@ QVariantList LocalFilesBackend::getItems(const QString &path) {
         qWarning("[LocalFiles] directory not found: %s", qPrintable(path));
         return result;
     }
-    QString canonical = QDir(path).canonicalPath();
-    QString root      = QDir(m_mediaRoot).canonicalPath();
-    if (!canonical.startsWith(root)) {
+    if (!isPathWithinMediaRoot(path)) {
         qWarning("[LocalFiles] path escapes media root: %s", qPrintable(path));
         return result;
     }
 
-    static const QStringList kPlaylistExts = { "m3u", "m3u8" };
     for (const QString &name : dir.entryList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name)) {
-        QString suffix = QFileInfo(name).suffix().toLower();
-        if (kPlaylistExts.contains(suffix)) {
+        if (isPlaylist(name)) {
             QString innerPath = dir.absoluteFilePath(name) + "/" + name;
             if (QFileInfo::exists(innerPath)) {
                 QVariantMap item;

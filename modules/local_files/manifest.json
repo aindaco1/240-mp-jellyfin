@@ -26,8 +26,11 @@
     {
       "key": "shuffle_playback",
       "label": "Shuffle Playback",
-      "type": "toggle",
-      "default": "OFF"
+      "type": "list_single",
+      "options_source": "dynamic",
+      "options_slot": "get_shuffle_playback_options",
+      "default": "ask",
+      "description": "Play playlists in random order.\n[ASK] lets you choose each time a playlist starts."
     },
     {
       "key": "resume_playback",
@@ -36,6 +39,40 @@
       "options_source": "dynamic",
       "options_slot": "get_resume_playback_options",
       "default": "ask"
+    },
+    {
+      "key": "auto_subtitles",
+      "label": "Auto Show Subtitles",
+      "type": "list_single",
+      "options_source": "dynamic",
+      "options_slot": "get_auto_subtitles_options",
+      "default": "forced",
+      "description": "Choose which subtitles start automatically.\n[FORCED ONLY] displays foreign-dialogue tracks when available."
+    },
+    {
+      "key": "sub_lang",
+      "label": "Subtitle Language",
+      "type": "list_single",
+      "options_source": "dynamic",
+      "options_slot": "get_subtitle_languages",
+      "default": "-",
+      "description": "Preferred automatic subtitle language.\n[ANY] leaves language selection to mpv."
+    },
+    {
+      "key": "image_duration",
+      "label": "Image Duration",
+      "type": "list_single",
+      "options_source": "dynamic",
+      "options_slot": "get_image_duration_options",
+      "default": "5",
+      "description": "How long each still image remains on screen."
+    },
+    {
+      "key": "hide_extensions",
+      "label": "Hide File Extensions",
+      "type": "toggle",
+      "default": "OFF",
+      "description": "Hide file extensions in the browser without changing paths."
     }
   ]
 }

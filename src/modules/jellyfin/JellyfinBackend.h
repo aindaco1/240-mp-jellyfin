@@ -28,9 +28,29 @@ public:
     Q_INVOKABLE void load_items(const QString &libraryId);
     Q_INVOKABLE void load_items_for_type(const QString &parentId, const QString &itemType, bool recursive);
     Q_INVOKABLE void load_item_detail(const QString &itemId);
+    Q_INVOKABLE void load_continue_watching();
+    Q_INVOKABLE void load_up_next();
+    Q_INVOKABLE void load_boxset_children(const QString &parentId);
+    Q_INVOKABLE void load_folder_children(const QString &parentId);
+    Q_INVOKABLE void load_next_episode(const QString &currentItemId);
     Q_INVOKABLE void build_stream_url(const QString &itemId, const QString &mediaSourceId = QString());
+    Q_INVOKABLE void request_playback(const QString &itemId, const QString &mediaSourceId,
+                                      int audioStreamIndex, int subtitleStreamIndex,
+                                      bool forceTranscode = false, qint64 startPositionTicks = 0);
+    Q_INVOKABLE void update_playback_progress(const QString &itemId, const QString &mediaSourceId,
+                                              qint64 positionTicks, bool isPaused = false);
+    Q_INVOKABLE void report_playback_stopped(const QString &itemId, const QString &mediaSourceId,
+                                             qint64 positionTicks, bool failed = false);
+    Q_INVOKABLE void fetchSegments(const QString &itemId);
+    Q_INVOKABLE void probeCapabilities();
+
+    Q_INVOKABLE QString get_last_audio_language() const { return m_lastAudioLanguage; }
+    Q_INVOKABLE QString get_last_subtitle_language() const { return m_lastSubtitleLanguage; }
+    Q_INVOKABLE void set_last_track_languages(const QString &audioLanguage,
+                                               const QString &subtitleLanguage);
 
     Q_INVOKABLE void getVideoQualities();
+    Q_INVOKABLE void getLibraries();
     Q_INVOKABLE void get_resume_playback_options();
 
 signals:
@@ -43,6 +63,8 @@ signals:
     void itemsPageLoaded(const QVariant &items, bool reset, bool finished);
     void itemLoaded(const QVariant &detail);
     void streamUrlReady(const QString &url, const QVariant &httpHeaders);
+    void nextEpisodeReady(const QVariantMap &detail);
+    void segmentsReady(const QString &itemId, const QVariantList &segments);
     void dynamicOptionsReady(const QString &key, const QVariant &options);
     void errorOccurred(const QString &message);
 
@@ -71,6 +93,13 @@ private:
     void authenticateWithQuickConnectSecret();
     void load_items_page(const QString &parentId, const QString &itemType, bool recursive,
                          int startIndex, int generation);
+    void load_special_items(const QUrl &url, const QString &errorPrefix);
+    void report_playback_start(const QString &itemId, const QString &mediaSourceId,
+                               int audioStreamIndex, int subtitleStreamIndex,
+                               qint64 startPositionTicks);
+    QJsonObject moduleConfig() const;
+    int videoQualityBitrate() const;
+    int videoQualityMaxHeight() const;
     QVariantMap formatLibrary(const QJsonObject &item) const;
     QVariantMap formatItem(const QJsonObject &item) const;
     static int ticksToMs(qint64 ticks);
@@ -82,6 +111,12 @@ private:
     QTimer *m_quickConnectTimer;
     QString m_quickConnectServerUrl;
     QString m_quickConnectSecret;
+    QString m_currentPlaySessionId;
+    QString m_currentPlayMethod;
+    QString m_lastAudioLanguage;
+    QString m_lastSubtitleLanguage = QStringLiteral("__off__");
+    bool m_capabilitiesProbed = false;
+    bool m_hasMediaSegments = false;
     int m_itemsLoadGeneration = 0;
     QVariantList m_itemsLoadAccumulator;
     QHash<QString, QVariantList> m_itemCache;

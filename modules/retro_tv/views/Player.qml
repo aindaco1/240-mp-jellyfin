@@ -591,20 +591,13 @@ FocusScope {
                 failedSkips = 0
         }
 
-        function onPlaybackFinished(finalPositionMs, finalDurationMs) {
+        function onPlaybackEnded(finalPositionMs, finalDurationMs, reason) {
             if (suppressFinish) {
                 suppressFinish = false
                 return
             }
-            goBack()
-        }
-
-        function onPlaybackFailed() {
-            if (suppressFinish) {
-                suppressFinish = false
-                return
-            }
-            handlePlaybackFailure()
+            if (reason === "failed") handlePlaybackFailure()
+            else goBack()
         }
 
         function onMpvKeyPressed(key) {

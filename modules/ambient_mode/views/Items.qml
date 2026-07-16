@@ -17,12 +17,43 @@ FocusScope {
     property var audioFiles: []
     property int videoIndex: 0
     property int audioIndex: 0   // 0 = "Video Audio"; 1+ = audioFiles[audioIndex - 1]
+    property bool shuffleVideo: false
+    property bool shuffleAudio: false
+    property bool autoLaunch: false
 
     focus: true
+
+    function enabledSetting(key) {
+        var value = appCore.get_setting(moduleRoot.moduleId, key)
+        return value === true || value === "ON"
+    }
+
+    function launchPlayer(selectedVideoPath, selectedAudioPath) {
+        navigateTo("Player.qml", {
+            videoPath: selectedVideoPath,
+            audioPath: selectedAudioPath,
+            shuffleVideo: shuffleVideo,
+            shuffleAudio: shuffleAudio,
+            videoPaths: videoFiles.map(function(file) { return file.path }),
+            audioPaths: audioFiles.map(function(file) { return file.path })
+        }, { returnedFromPlayer: true })
+    }
 
     Component.onCompleted: {
         videoFiles = ambientModeBackend.getVideoFiles()
         audioFiles = ambientModeBackend.getAudioFiles()
+        shuffleVideo = enabledSetting("shuffle_video")
+        shuffleAudio = enabledSetting("shuffle_audio")
+        autoLaunch = enabledSetting("auto_launch")
+
+        if (autoLaunch && videoFiles.length > 0 && !navListState.returnedFromPlayer) {
+            var selectedVideo = shuffleVideo
+                              ? videoFiles[Math.floor(Math.random() * videoFiles.length)].path
+                              : videoFiles[videoIndex].path
+            var selectedAudio = shuffleAudio && audioFiles.length > 0
+                              ? audioFiles[Math.floor(Math.random() * audioFiles.length)].path : ""
+            Qt.callLater(function() { launchPlayer(selectedVideo, selectedAudio) })
+        }
     }
 
     Keys.onPressed: function(event) {
@@ -50,7 +81,7 @@ FocusScope {
         } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
             if (focusRow === 2 && videoFiles.length > 0) {
                 var audioPath = audioIndex > 0 ? audioFiles[audioIndex - 1].path : ""
-                navigateTo("Player.qml", { videoPath: videoFiles[videoIndex].path, audioPath: audioPath }, {})
+                launchPlayer(videoFiles[videoIndex].path, audioPath)
             }
             event.accepted = true
         }

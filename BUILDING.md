@@ -116,15 +116,15 @@ Set them inline, e.g. `QML_IMPORT_TRACE=1 APP_ROOT=$(pwd) ./build/240-mp-jellyfi
 Releases are built automatically when you push a version tag:
 
 ```bash
-git tag v1.0
-git push origin v1.0
+git tag v1.1.0
+git push origin v1.1.0
 ```
 
 And you can use pre-release tags to test CI without making a public release:
 
 ```bash
-git tag v1.1-rc1
-git push origin v1.1-rc1
+git tag v1.1.0-rc1
+git push origin v1.1.0-rc1
 ```
 
 Tags containing `-rc`, `-beta`, or `-alpha` are published as GitHub pre-releases.
@@ -137,7 +137,9 @@ The intended workflow is a macOS Apple Silicon build:
 |---|---|---|
 | `build-macos-arm64` | `macos-26` (arm64) | `240-mp-jellyfin-<tag>-macOS-arm64.dmg` |
 
-macOS jobs: installs Qt via the Qt CDN, configures CMake for `arm64`, downloads and verifies pinned yt-dlp/Deno, builds and tests, embeds all helpers, runs `macdeployqt`, prunes QML plugins not used by the app, verifies every Mach-O file under a stripped environment (including one live extraction from each Karaoke source), rejects `.DS_Store`, broken symlinks, and external load paths, Developer-ID signs both the app and `.dmg`, then notarizes and staples the disk image.
+macOS jobs: installs Qt via the Qt CDN, configures CMake for `arm64`, downloads and verifies pinned yt-dlp/Deno, builds and tests, embeds all helpers, runs `macdeployqt`, prunes QML plugins not used by the app, verifies every Mach-O file under a stripped environment (including one live extraction from each Karaoke source), rejects `.DS_Store`, broken symlinks, and external load paths, Developer-ID signs the app and `.dmg`, notarizes and staples both, validates Gatekeeper acceptance, and publishes the DMG plus a SHA-256 checksum file.
+
+The in-app updater consumes the same release. GitHub's API asset digest is mandatory, and the downloaded bundle must pass notarization, signature-team, bundle-ID, version, and arm64 checks before installation.
 
 ## Local Verification
 
@@ -169,6 +171,24 @@ cmake --install build --prefix /tmp/240mp-jellyfin-install-test
 ```
 
 After running `macdeployqt`, use `scripts/macos_prune_qt_deployment.zsh` to retain only QML plugins found by `qmlimportscanner`, then run `scripts/macos_verify_bundle.zsh` before signing. The release workflow is the canonical invocation for both scripts.
+
+### Cleaning Generated Artifacts
+
+Preview ignored build output before removing it:
+
+```bash
+git clean -ndX
+```
+
+When the preview contains only disposable generated files, remove them and recreate the single development tree:
+
+```bash
+git clean -fdX
+cmake -B build -DCMAKE_PREFIX_PATH=/opt/homebrew/opt/qt .
+cmake --build build
+```
+
+This retains tracked development scripts, CMake helpers, entitlements, source, and tests while removing old build/package trees, DMGs, logs, caches, and Finder metadata.
 
 When applying hardened-runtime signatures, preserve the bundled Deno binary's
 upstream entitlements. Sign standalone yt-dlp with

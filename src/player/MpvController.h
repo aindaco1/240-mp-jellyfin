@@ -4,6 +4,7 @@
 #include <QLocalSocket>
 #include <QTimer>
 #include <QJsonArray>
+#include <QVariantMap>
 
 #ifdef Q_OS_LINUX
 #include <xf86drm.h>
@@ -27,7 +28,8 @@ class MpvController : public QObject {
     Q_PROPERTY(int playlistPos READ playlistPos NOTIFY playlistPosChanged)
 
 public:
-    explicit MpvController(const QString &appRoot, QObject *parent = nullptr);
+    explicit MpvController(const QString &appRoot, class AppCore *appCore = nullptr,
+                           QObject *parent = nullptr);
     ~MpvController() override;
 
     int position()    const { return m_position;    }
@@ -47,11 +49,16 @@ public:
                                   const QStringList &httpHeaderFields = {},
                                   const QString &videoFilters = {},
                                   const QStringList &inputBindings = {});
+    // Preferred QML entry point. Named options keep module call sites stable as
+    // playback capabilities grow; loadAndPlay remains as a compatibility API.
+    Q_INVOKABLE void loadAndPlayWithOptions(const QString &url, const QVariantMap &options = {});
     Q_INVOKABLE void stop();
     Q_INVOKABLE void seekTo(int positionMs);
     Q_INVOKABLE void sendKey(const QString &key);
     Q_INVOKABLE void setVideoFilters(const QString &filters);
     Q_INVOKABLE void showText(const QString &text, int durationMs = 4000);
+    Q_INVOKABLE void showOsdSkipPrompt();
+    Q_INVOKABLE void clearOsdPrompt();
     Q_INVOKABLE void appendPlaylistItem(const QString &url);
     Q_INVOKABLE void playPlaylistItem(int index);
     Q_INVOKABLE void replacePlaylistItem(int index, const QString &url);
@@ -64,9 +71,15 @@ signals:
     void durationChanged(int ms);
     void playlistPosChanged(int pos);
     void mpvKeyPressed(const QString &key);
+    void skipRequested();
     void playbackItemLoaded(int playlistIndex);
     void playbackItemEnded(int playlistIndex, const QString &reason, const QString &error);
+    // Emitted exactly once when the mpv process exits. `reason` is "eof",
+    // "stopped", or "failed". New module players should handle this signal so
+    // no terminal playback case is accidentally omitted.
+    void playbackEnded(int finalPositionMs, int finalDurationMs, const QString &reason);
     // Emitted when mpv exits normally (user quit or end of file).
+    // Compatibility signals for older hidden/custom modules.
     void playbackFinished(int finalPositionMs, int finalDurationMs);
     // Emitted when mpv exits with an error.
     // Player.qml uses this to retry with transcoding.
@@ -100,15 +113,20 @@ private:
     QTimer       *m_watchdogTimer  = nullptr;
     qint64        m_lastIpcEventMs = 0;
     QString       m_appRoot;
+    AppCore       *m_appCore = nullptr;
     QString       m_socketPath;
     QString       m_inputConfPath;
     QString       m_logFilePath;
     QString       m_httpHeaderConfPath;
+    QString       m_lastEndFileReason;
+    QString       m_lastEndFileError;
     QList<QJsonArray> m_pendingPlaylistCommands;
     int           m_position     = 0;
     int           m_duration     = 0;
     int           m_playlistPos  = -1;
     bool          m_headlessMode = false;
+    bool          m_pendingStartClear = false;
+    bool          m_paused = false;
     int           m_previousVt   = -1;
     int           m_qtDrmFd      = -1;
 #ifdef Q_OS_LINUX

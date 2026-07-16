@@ -7,6 +7,7 @@
 #include <QCursor>
 #include <QDebug>
 #include <QWindow>
+#include <QQuickWindow>
 #include <QScreen>
 #include <QVariant>
 #include <locale.h>
@@ -19,6 +20,9 @@
 #include "modules/ambient_mode/AmbientModeBackend.h"
 #include "modules/tumblr_screensaver/TumblrScreensaverBackend.h"
 #include "player/MpvController.h"
+#include "input/IdleTracker.h"
+#include "input/InputManager.h"
+#include "update/UpdateManager.h"
 #ifdef Q_OS_MAC
 #include "macos_utils.h"
 #endif
@@ -42,8 +46,10 @@ static QString resolveAppRoot() {
 
 static QString resolveDataRoot() {
     QString envRoot = qEnvironmentVariable("DATA_ROOT");
-    if (!envRoot.isEmpty())
+    if (!envRoot.isEmpty()) {
+        QDir().mkpath(envRoot);
         return QDir(envRoot).canonicalPath();
+    }
 
     QString path = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
     QDir().mkpath(path);
@@ -80,7 +86,11 @@ static int lowBatteryThresholdFromSettings(AppCore &appCore) {
 int main(int argc, char *argv[]) {
     QGuiApplication app(argc, argv);
     app.setApplicationName("240-mp-jellyfin");
-    app.setApplicationVersion("1.0");
+#ifdef APP_VERSION
+    app.setApplicationVersion(QStringLiteral(APP_VERSION));
+#else
+    app.setApplicationVersion(QStringLiteral("dev"));
+#endif
 
     // Hide cursor — this app is keyboard-only so the cursor serves no purpose.
     // On Linux, only hide on headless EGLFS (not desktop X11/Wayland sessions).
@@ -112,7 +122,12 @@ int main(int argc, char *argv[]) {
     KaraokeBackend      karaokeBackend(appRoot, dataRoot);
     AmbientModeBackend  ambientMode(appRoot, dataRoot);
     TumblrScreensaverBackend tumblrScreensaver;
-    MpvController       mpvController(appRoot);
+    MpvController       mpvController(appRoot, &appCore);
+    IdleTracker         idleTracker;
+    InputManager        inputManager;
+    UpdateManager       updateManager(dataRoot);
+    QObject::connect(&inputManager, &InputManager::mpvKeyRequested,
+                     &mpvController, &MpvController::sendKey);
 
 #ifdef Q_OS_MAC
     auto applySleepPreventionSettings = [&appCore]() {
@@ -145,6 +160,9 @@ int main(int argc, char *argv[]) {
 
     ctx->setContextProperty("appCore",       &appCore);
     ctx->setContextProperty("mpvController", &mpvController);
+    ctx->setContextProperty("idleTracker",   &idleTracker);
+    ctx->setContextProperty("inputManager",  &inputManager);
+    ctx->setContextProperty("updateManager", &updateManager);
     QScreen *externalMediaScreen = resolveExternalMediaScreen();
     QRect externalMediaGeometry = externalMediaScreen ? externalMediaScreen->geometry() : QRect(0, 0, macW, macH);
     ctx->setContextProperty("hasExternalMediaScreen", externalMediaScreen != nullptr);
@@ -166,6 +184,8 @@ int main(int argc, char *argv[]) {
         qCritical("[main] QML engine failed to load Main.qml");
         return 1;
     }
+    if (QQuickWindow *window = qobject_cast<QQuickWindow *>(engine.rootObjects().first()))
+        inputManager.setTargetWindow(window);
 
 #ifdef Q_OS_MAC
     if (QWindow *win = qobject_cast<QWindow *>(engine.rootObjects().first())) {

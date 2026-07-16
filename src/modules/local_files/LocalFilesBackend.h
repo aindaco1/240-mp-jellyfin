@@ -12,12 +12,19 @@ public:
     Q_INVOKABLE QVariantList getItems(const QString &path);
     Q_INVOKABLE QString      mediaRoot() const;
     Q_INVOKABLE void         setMediaRoot(const QString &path);
+    Q_INVOKABLE bool         isImage(const QString &path) const;
+    Q_INVOKABLE bool         isPlaylist(const QString &path) const;
+    Q_INVOKABLE bool         playlistContainsImages(const QString &path) const;
 
     Q_INVOKABLE QVariantMap getSavedPosition(const QString &filePath);
     Q_INVOKABLE void        savePosition(const QString &filePath, int positionMs, int playlistPos);
     Q_INVOKABLE void        clearPosition(const QString &filePath);
     Q_INVOKABLE QVariantMap probeMediaTracks(const QString &filePath);
     Q_INVOKABLE void get_resume_playback_options();
+    Q_INVOKABLE void get_shuffle_playback_options();
+    Q_INVOKABLE void get_auto_subtitles_options();
+    Q_INVOKABLE void get_subtitle_languages();
+    Q_INVOKABLE void get_image_duration_options();
 
 signals:
     void dynamicOptionsReady(const QString &key, const QVariant &options);
@@ -33,4 +40,5 @@ private:
     QString      historyFilePath() const;
     QVariantMap  loadHistory() const;
     void         saveHistory(const QVariantMap &history);
+    bool         isPathWithinMediaRoot(const QString &path) const;
 };

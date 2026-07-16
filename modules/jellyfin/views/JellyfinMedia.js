@@ -124,6 +124,40 @@ function defaultAudioIndex(audioStreams) {
     return 0
 }
 
+function preferredAudioIndex(audioStreams, language) {
+    if (language) {
+        for (var i = 0; i < audioStreams.length; i++) {
+            if ((audioStreams[i].language || "").toLowerCase() === language.toLowerCase())
+                return i
+        }
+    }
+    return defaultAudioIndex(audioStreams)
+}
+
+function preferredSubtitleIndex(subtitleStreams, language) {
+    if (!language || language === "__off__") return 0
+    for (var i = 1; i < subtitleStreams.length; i++) {
+        if ((subtitleStreams[i].language || "").toLowerCase() === language.toLowerCase())
+            return i
+    }
+    return 0
+}
+
+function selectedAudioStreamIndex(audioStreams, audioIdx) {
+    var selected = audioStreams && audioStreams[audioIdx]
+    return selected && selected.streamIndex !== undefined ? selected.streamIndex : -1
+}
+
+function selectedSubtitleStreamIndex(subtitleStreams, subtitleIdx) {
+    var selected = subtitleStreams && subtitleStreams[subtitleIdx]
+    return selected && selected.streamIndex !== undefined ? selected.streamIndex : -1
+}
+
+function selectedLanguage(streams, index, offValue) {
+    var selected = streams && streams[index]
+    return selected ? (selected.language || "") : (offValue || "")
+}
+
 function maxTrackFocusRow(audioStreams, subtitleStreams) {
     var maxRow = 0
     if (audioStreams && audioStreams.length > 0)

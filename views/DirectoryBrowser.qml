@@ -16,7 +16,8 @@ FocusScope {
     property var listModel: {
         var items = [
             { name: "..PARENT DIRECTORY", entryType: "up" },
-            { name: "<USE THIS DIRECTORY>", entryType: "select" }
+            { name: "<USE THIS DIRECTORY>", entryType: "select" },
+            { name: "<USE DEFAULT DIRECTORY>", entryType: "default" }
         ]
         for (var i = 0; i < dirEntries.length; i++) {
             items.push({ name: dirEntries[i].name, path: dirEntries[i].path, entryType: "dir" })
@@ -43,6 +44,11 @@ FocusScope {
 
     function selectCurrent() {
         appCore.save_setting(moduleId, settingKey, currentBrowsePath)
+        goBack()
+    }
+
+    function selectDefault() {
+        appCore.save_setting(moduleId, settingKey, "")
         goBack()
     }
 
@@ -84,6 +90,7 @@ FocusScope {
             if (!entry) return
             if (entry.entryType === "up") browserRoot.goUp()
             else if (entry.entryType === "select") browserRoot.selectCurrent()
+            else if (entry.entryType === "default") browserRoot.selectDefault()
             else if (entry.entryType === "dir") browserRoot.navigateInto(entry.path)
         }
         Keys.onPressed: function(event) {
@@ -105,7 +112,7 @@ FocusScope {
                     text: modelData.name || ""
                     color: {
                         if (dirList.currentIndex === index) return root.surfaceColor
-                        if (modelData.entryType === "up" || modelData.entryType === "select") return root.accentColor
+                        if (modelData.entryType === "up" || modelData.entryType === "select" || modelData.entryType === "default") return root.accentColor
                         return root.primaryColor
                     }
                     font.family: root.globalFont

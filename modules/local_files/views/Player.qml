@@ -14,34 +14,41 @@ FocusScope {
     property int    subtitleTrack: (navParams.subtitleTrack !== undefined && navParams.subtitleTrack !== null)
                                   ? navParams.subtitleTrack : -1
     property var    subtitleFiles: navParams.subtitleFiles || []
+    property bool   subtitleExplicit: navParams.subtitleExplicit || false
 
     property bool   overlayVisible:      false
-    property int    savedPositionMs:     0
-    property int    savedPlaylistPos:    -1
     property int    choiceIndex:         0
+    property var    choices:             []
     property bool   loopOn:              false
-    property bool   shuffleOn:           false
+    property string shuffleSetting:      "ask"
     property string resumeSetting:       "ask"
+    property string subtitleMode:        "forced"
+    property var    subtitleLanguages:   []
+    property int    imageDurationSeconds: 5
+    property bool   imageContent:        false
+
+    property int automaticSubtitleTrack: subtitleMode === "on" ? 0
+                                            : subtitleMode === "forced" ? -1 : -2
 
     // Track last non-null values during playback for robust save on exit
     property int    lastKnownPositionMs:  0
     property int    lastKnownDurationMs:  0
     property int    lastKnownPlaylistPos: -1
 
-    // Playlist resume correction: --start=T is global so every subsequent
-    // video in the playlist would also start at T. We track which playlist
-    // position was resumed from and seek to 0 on the first position event
-    // after each advancement past that point.
-    property int    resumedFromPlaylistPos: -1
-    property bool   needsSeekToZero:        false
-
     focus: true
 
-    function launchPlayback(startSeconds, playlistStart, useShuffle) {
-        mpvController.loadAndPlay(filePath, startSeconds,
-                                  audioTrack, subtitleTrack, subtitleFiles,
-                                  loopOn, playlistStart, 0.0, "",
-                                  false, "", useShuffle || false)
+    function launchPlayback(startMs, playlistStart, useShuffle) {
+        mpvController.loadAndPlayWithOptions(filePath, {
+            startSeconds: startMs > 0 ? startMs / 1000.0 : 0,
+            audioTrack: audioTrack,
+            subtitleTrack: subtitleExplicit ? subtitleTrack : automaticSubtitleTrack,
+            subtitleFiles: subtitleExplicit ? subtitleFiles : [],
+            subtitleLanguages: subtitleLanguages,
+            loop: loopOn,
+            playlistStart: playlistStart,
+            shuffle: useShuffle || false,
+            imageDurationSeconds: imageDurationSeconds
+        })
     }
 
     Keys.onPressed: function(event) {
@@ -50,18 +57,15 @@ FocusScope {
                 goBack()
                 event.accepted = true
             } else if (event.key === Qt.Key_Up) {
-                choiceIndex = 0
+                if (choiceIndex > 0) choiceIndex--
                 event.accepted = true
             } else if (event.key === Qt.Key_Down) {
-                choiceIndex = 1
+                if (choiceIndex < choices.length - 1) choiceIndex++
                 event.accepted = true
             } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
-                var startMs    = choiceIndex === 0 ? savedPositionMs  : 0
-                var startPlPos = choiceIndex === 0 ? savedPlaylistPos : -1
-                if (choiceIndex === 0 && startPlPos >= 0)
-                    resumedFromPlaylistPos = startPlPos
+                var choice = choices[choiceIndex]
                 overlayVisible = false
-                launchPlayback(startMs / 1000.0, startPlPos, false)
+                launchPlayback(choice.startMs, choice.playlistPos, choice.shuffle)
                 event.accepted = true
             }
         } else {
@@ -97,28 +101,20 @@ FocusScope {
         target: mpvController
 
         function onPositionChanged(ms) {
-            if (ms > 0) {
-                if (needsSeekToZero) {
-                    needsSeekToZero = false
-                    mpvController.seekTo(0)
-                    return
-                }
+            if (ms > 0)
                 playerRoot.lastKnownPositionMs = ms
-            }
         }
         function onDurationChanged(ms) {
             if (ms > 0) playerRoot.lastKnownDurationMs = ms
         }
         function onPlaylistPosChanged(pos) {
             if (pos >= 0) {
-                if (resumedFromPlaylistPos >= 0 && pos > resumedFromPlaylistPos)
-                    needsSeekToZero = true
                 playerRoot.lastKnownPlaylistPos = pos
                 playerRoot.lastKnownPositionMs  = 0
             }
         }
 
-        function onPlaybackFinished(finalPositionMs, finalDurationMs) {
+        function onPlaybackEnded(finalPositionMs, finalDurationMs, reason) {
             var pos   = lastKnownPositionMs  || finalPositionMs
             var dur   = lastKnownDurationMs  || finalDurationMs
             var plPos = lastKnownPlaylistPos
@@ -141,18 +137,41 @@ FocusScope {
     Component.onCompleted: {
         if (filePath === "") return
         loopOn        = !!appCore.get_setting(moduleRoot.moduleId, "loop_playback")
-        shuffleOn     = !!appCore.get_setting(moduleRoot.moduleId, "shuffle_playback")
+        var shuffleRaw = appCore.get_setting(moduleRoot.moduleId, "shuffle_playback")
+        shuffleSetting = typeof shuffleRaw === "boolean"
+                       ? (shuffleRaw ? "yes" : "no") : (shuffleRaw || "ask")
         resumeSetting = appCore.get_setting(moduleRoot.moduleId, "resume_playback") || "ask"
+        var subtitleRaw = appCore.get_setting(moduleRoot.moduleId, "auto_subtitles")
+        subtitleMode = typeof subtitleRaw === "boolean"
+                     ? (subtitleRaw ? "on" : "forced") : (subtitleRaw || "forced")
+        var language = appCore.get_setting(moduleRoot.moduleId, "sub_lang") || "-"
+        subtitleLanguages = language === "-" ? [] : [language]
+        var duration = parseInt(appCore.get_setting(moduleRoot.moduleId, "image_duration") || "5")
+        imageDurationSeconds = isNaN(duration) ? 5 : duration
+        imageContent = isImage(filePath) ||
+                       (isPlaylist(filePath) && localFilesBackend.playlistContainsImages(filePath))
 
-        // Shuffle wins: a shuffled playlist starts fresh & random; resume position
-        // (a sequential item index) is meaningless once order is randomized.
-        if (shuffleOn && isPlaylist(filePath)) {
-            launchPlayback(0.0, -1, true)
+        var playlist = isPlaylist(filePath)
+        if (playlist && shuffleSetting === "yes") {
+            launchPlayback(0, -1, true)
+            return
+        }
+
+        if (!playlist && isImage(filePath)) {
+            launchPlayback(0, -1, false)
             return
         }
 
         if (resumeSetting === "no") {
-            launchPlayback(0.0, -1, false)
+            if (playlist && shuffleSetting === "ask") {
+                choices = [
+                    { label: "Play in order", startMs: 0, playlistPos: -1, shuffle: false },
+                    { label: "Shuffle", startMs: 0, playlistPos: -1, shuffle: true }
+                ]
+                overlayVisible = true
+            } else {
+                launchPlayback(0, -1, false)
+            }
             return
         }
 
@@ -160,19 +179,34 @@ FocusScope {
         var savedPos = saved.pos   || 0
         var savedPl  = (saved.plPos !== undefined && saved.plPos !== null) ? saved.plPos : -1
 
-        if (resumeSetting === "yes") {
-            if (savedPos > 0 && savedPl >= 0)
-                resumedFromPlaylistPos = savedPl
-            launchPlayback(savedPos > 0 ? savedPos / 1000.0 : 0.0,
-                           savedPos > 0 ? savedPl : -1,
-                           false)
+        var askShuffle = playlist && shuffleSetting === "ask"
+        if (resumeSetting === "yes" && !askShuffle) {
+            launchPlayback(savedPos, savedPos > 0 ? savedPl : -1, false)
         } else {
+            var opts = []
             if (savedPos > 0) {
-                savedPositionMs  = savedPos
-                savedPlaylistPos = savedPl
-                overlayVisible   = true
+                opts.push({
+                    label: savedPl >= 0
+                         ? "Resume video " + (savedPl + 1) + " at " + formatTime(savedPos)
+                         : "Resume from " + formatTime(savedPos),
+                    startMs: savedPos, playlistPos: savedPl, shuffle: false
+                })
+                if (resumeSetting === "ask")
+                    opts.push({ label: "Start from the beginning", startMs: 0, playlistPos: -1, shuffle: false })
+            } else if (askShuffle) {
+                opts.push({ label: "Play in order", startMs: 0, playlistPos: -1, shuffle: false })
+            }
+            if (askShuffle)
+                opts.push({ label: "Shuffle", startMs: 0, playlistPos: -1, shuffle: true })
+
+            if (opts.length > 1) {
+                choices = opts
+                choiceIndex = 0
+                overlayVisible = true
+            } else if (opts.length === 1) {
+                launchPlayback(opts[0].startMs, opts[0].playlistPos, opts[0].shuffle)
             } else {
-                launchPlayback(0.0, -1, false)
+                launchPlayback(0, -1, false)
             }
         }
     }
@@ -201,7 +235,7 @@ FocusScope {
             color: root.surfaceColor
             anchors.centerIn: parent
             width: root.sw * 0.76875 //492
-            height: root.sh * 0.2833333 //136
+            height: root.sh * (0.2833333 + Math.max(0, choices.length - 2) * 0.0583333)
 
             Column {
                 id: dialogColumn
@@ -209,7 +243,8 @@ FocusScope {
                 spacing: root.sh * 0.05 //24
 
                 Text {
-                    text: "RESUME PLAYBACK?"
+                    text: choices.some(function(choice) { return choice.shuffle })
+                          ? "START PLAYBACK?" : "RESUME PLAYBACK?"
                     color: root.secondaryColor
                     font.family: root.globalFont
                     font.pixelSize: root.sh * 0.0333333 //16
@@ -218,12 +253,7 @@ FocusScope {
 
                 Column {
                     Repeater {
-                        model: [
-                            savedPlaylistPos >= 0
-                                ? "Resume video " + (savedPlaylistPos + 1) + " at " + formatTime(savedPositionMs)
-                                : "Resume from " + formatTime(savedPositionMs),
-                            "Start from the beginning"
-                        ]
+                        model: choices
                         delegate: Item {
                             width: dialogColumn.width
                             height: root.sh * 0.0583333 //28
@@ -238,7 +268,7 @@ FocusScope {
                                 id: delegateText
                                 anchors.verticalCenter: parent.verticalCenter
                                 anchors.horizontalCenter: parent.horizontalCenter
-                                text: modelData
+                                text: modelData.label
                                 color: index === choiceIndex ? root.surfaceColor : root.primaryColor
                                 font.family: root.globalFont
                                 font.capitalization: Font.AllUppercase
@@ -264,9 +294,10 @@ FocusScope {
     }
 
     function isPlaylist(path) {
-        var lower = path.toLowerCase()
-        return lower.endsWith(".m3u") || lower.endsWith(".m3u8")
+        return localFilesBackend.isPlaylist(path)
     }
+
+    function isImage(path) { return localFilesBackend.isImage(path) }
 
     function formatTime(ms) {
         var s   = Math.floor(ms / 1000)

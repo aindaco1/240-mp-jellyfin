@@ -82,6 +82,22 @@ void AppCore::saveConfig(const QJsonObject &config) const {
     f.write(QJsonDocument(config).toJson(QJsonDocument::Indented));
 }
 
+bool AppCore::isModuleEnabled(const ModuleEntry &module,
+                              const QJsonObject &modulesConfig) const {
+    const QJsonObject configured = modulesConfig.value(module.id).toObject();
+    bool defaultEnabled = true;
+    for (const QVariant &value : module.settings) {
+        const QVariantMap setting = value.toMap();
+        if (setting.value("key").toString() == QLatin1String("enabled")) {
+            defaultEnabled = setting.value("default").toString().compare(
+                                 "OFF", Qt::CaseInsensitive) != 0;
+            break;
+        }
+    }
+    return configured.contains("enabled") ? configured.value("enabled").toBool(true)
+                                           : defaultEnabled;
+}
+
 // ---------------------------------------------------------------------------
 // Q_INVOKABLE slots
 // ---------------------------------------------------------------------------
@@ -97,18 +113,7 @@ void AppCore::scan_for_modules() {
             continue;
         }
 
-        // Respect "enabled" setting; fall back to manifest default, then true
-        QJsonObject mCfg = modulesConfig[m.id].toObject();
-        bool manifestDefault = true;
-        for (const auto &sv : m.settings) {
-            QVariantMap s = sv.toMap();
-            if (s["key"].toString() == "enabled") {
-                manifestDefault = s["default"].toString().toUpper() != "OFF";
-                break;
-            }
-        }
-        bool enabled = mCfg.contains("enabled") ? mCfg["enabled"].toBool(true) : manifestDefault;
-        if (!enabled) {
+        if (!isModuleEnabled(m, modulesConfig)) {
             qDebug("[AppCore] Module disabled: %s", qPrintable(m.name));
             continue;
         }
@@ -134,7 +139,10 @@ QVariant AppCore::get_setting(const QString &moduleId, const QString &key) {
         target = config["app"].toObject();
     else
         target = config["modules"].toObject()[moduleId].toObject();
-    return target[key].toVariant();
+    const QStringList parts = key.split('.', Qt::KeepEmptyParts);
+    if (parts.size() == 2)
+        return target.value(parts[0]).toObject().value(parts[1]).toVariant();
+    return target.value(key).toVariant();
 }
 
 void AppCore::save_setting(const QString &moduleId, const QString &key, const QVariant &value) {
@@ -273,6 +281,10 @@ void AppCore::onBackendAuthStateChanged() {
 QString AppCore::get_module_auth_state(const QString &moduleId) {
     auto it = m_backends.find(moduleId);
     if (it == m_backends.end()) return QString{};
+    if (it.value()->metaObject()->indexOfMethod(
+            QMetaObject::normalizedSignature("get_auth_state()")) < 0) {
+        return QString{};
+    }
     QString result;
     bool ok = QMetaObject::invokeMethod(
         it.value(), "get_auth_state",
@@ -284,6 +296,7 @@ QString AppCore::get_module_auth_state(const QString &moduleId) {
 }
 
 QVariant AppCore::get_installed_modules() {
+    const QJsonObject modulesConfig = loadConfig().value("modules").toObject();
     QVariantList result;
     for (const auto &m : m_modules) {
         if (m.hidden)
@@ -291,28 +304,17 @@ QVariant AppCore::get_installed_modules() {
         result.append(QVariantMap{
             {"id",           m.id},
             {"name",         m.name},
-            {"has_settings", !m.settings.isEmpty()}
+            {"has_settings", !m.settings.isEmpty()},
+            {"enabled",      isModuleEnabled(m, modulesConfig)},
+            {"entry_point",  QStringLiteral("modules/%1/%2").arg(m.folder, m.entryQml)}
         });
     }
     return result;
 }
 
-QVariantMap AppCore::getCustomColorScheme() const {
+QVariantMap AppCore::importColorScheme(const QJsonObject &obj) const {
     static const QStringList kRequiredKeys = {"primary","secondary","tertiary","surface","accent"};
     static const QRegularExpression kHexColor("^#[0-9A-Fa-f]{6}$");
-
-    QFile f(m_dataRoot + "/custom_color_scheme.json");
-    if (!f.exists()) return {};
-    if (!f.open(QIODevice::ReadOnly)) return {};
-
-    QJsonParseError err;
-    QJsonDocument doc = QJsonDocument::fromJson(f.readAll(), &err);
-    if (err.error != QJsonParseError::NoError || !doc.isObject()) {
-        qWarning("[AppCore] custom_color_scheme.json: invalid JSON");
-        return {};
-    }
-
-    QJsonObject obj = doc.object();
     QVariantMap result;
     for (const QString &key : kRequiredKeys) {
         if (!obj.contains(key) || !obj[key].isString()) {
@@ -328,6 +330,30 @@ QVariantMap AppCore::getCustomColorScheme() const {
         result[key] = value;
     }
     return result;
+}
+
+QVariantMap AppCore::getCustomColorScheme() const {
+    QFile file(m_dataRoot + "/custom_color_scheme.json");
+    if (!file.open(QIODevice::ReadOnly)) return {};
+    const QJsonDocument document = QJsonDocument::fromJson(file.readAll());
+    return document.isObject() ? importColorScheme(document.object()) : QVariantMap{};
+}
+
+QVariantMap AppCore::getCustomColorSchemes() const {
+    static const QRegularExpression validName(QStringLiteral("^[^\\\"`]{3,28}$"));
+    QFile file(m_dataRoot + "/custom_color_schemes.json");
+    if (!file.open(QIODevice::ReadOnly)) return {};
+    const QJsonDocument document = QJsonDocument::fromJson(file.readAll());
+    if (!document.isObject()) return {};
+    QVariantMap schemes;
+    const QJsonObject object = document.object();
+    for (const QString &name : object.keys()) {
+        if (!validName.match(name).hasMatch() || !object.value(name).isObject())
+            continue;
+        const QVariantMap scheme = importColorScheme(object.value(name).toObject());
+        if (scheme.size() == 5) schemes.insert(name, scheme);
+    }
+    return schemes;
 }
 
 QVariantList AppCore::listDirectories(const QString &path) {
@@ -352,4 +378,16 @@ QString AppCore::parentDirectory(const QString &path) {
 
 QString AppCore::homePath() {
     return QDir::homePath();
+}
+
+QString AppCore::startupModuleEntryPoint() const {
+    const QJsonObject config = loadConfig();
+    const QString moduleId = config.value("app").toObject().value("startup_module").toString();
+    if (moduleId.isEmpty() || moduleId == QLatin1String("None")) return {};
+    const QJsonObject modulesConfig = config.value("modules").toObject();
+    for (const ModuleEntry &module : m_modules) {
+        if (!module.hidden && module.id == moduleId && isModuleEnabled(module, modulesConfig))
+            return QStringLiteral("modules/%1/%2").arg(module.folder, module.entryQml);
+    }
+    return {};
 }

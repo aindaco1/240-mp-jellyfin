@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - 'v*.*'
+      - '[0-9]*.*'
 
 jobs:
 
@@ -56,47 +57,9 @@ jobs:
           scripts/macos_prune_qt_deployment.zsh \
             "$APP" "$GITHUB_WORKSPACE" "$QML_IMPORT_SCANNER" "$QML_IMPORT_PATH"
 
-      - name: Verify self-contained app bundle
+      - name: Verify self-contained bundle structure
         run: |
           APP="${GITHUB_WORKSPACE}/install/240-mp-jellyfin.app"
-          BIN="$APP/Contents/Resources/bin"
-          HELPER_HOME="$RUNNER_TEMP/helper-home"
-          mkdir -p "$HELPER_HOME"
-
-          expected_yt_dlp=$(sed -n 's/^YT_DLP_VERSION:STRING=//p' build/CMakeCache.txt)
-          expected_deno=$(sed -n 's/^DENO_VERSION:STRING=//p' build/CMakeCache.txt)
-          test "$(env -i HOME="$HELPER_HOME" PATH=/usr/bin:/bin "$BIN/yt-dlp" --version)" = "$expected_yt_dlp"
-          env -i HOME="$HELPER_HOME" PATH=/usr/bin:/bin "$BIN/deno" --version | head -n 1 | grep -F "deno $expected_deno"
-          env -i HOME="$HELPER_HOME" PATH=/usr/bin:/bin "$BIN/mpv" --version >/dev/null
-          env -i HOME="$HELPER_HOME" PATH=/usr/bin:/bin "$BIN/ffmpeg" -version >/dev/null
-          env -i HOME="$HELPER_HOME" PATH=/usr/bin:/bin "$BIN/ffprobe" -version >/dev/null
-
-          for channel_id in \
-            UCtPzvwooQ18YZ8Wq8Hka60g \
-            UCBfV298JqKc8o9CM0aANz5A \
-            UCoVB6wMm2pNGMKQTChKCiRQ \
-            UCIauImhx1GGrl7LubRCxXcg \
-            UCNU7LlZ_nKVaq9Lihj0sAHQ \
-            UCR0kPElUivbuZC7Myr7Tg1Q \
-            UCTQHT1Gj_D_Bc7P1REuMoAg \
-            UCPZsA3OSQreeZlKIo6jqUog \
-            UCvgYvYeZe-BANj-cVUd59mQ \
-            UCkXE7x417ME2iudNECaLUFA \
-            UC6m4V2RfKXs4dP3R7AfCK4g \
-            UCqspiYXbxpZpgWzzxUUbTiw \
-            UCdwO61VZMYpozDiAJ6ZI3pg \
-            UC4T6FfTdpvxUrf9-dd4kjpw \
-            UCxuk5azVGJ-aumAds7WMHmg \
-            UCg0i5aSL_2rhf4iztlLmLUQ; do
-            sample=$(env -i HOME="$HELPER_HOME" PATH=/usr/bin:/bin \
-              "$BIN/yt-dlp" --no-config --no-update --no-cache-dir --no-warnings \
-              --flat-playlist --lazy-playlist --playlist-end 1 \
-              --js-runtimes "deno:$BIN/deno" \
-              --print '%(id)s\t%(title)s' \
-              "https://www.youtube.com/channel/$channel_id/videos")
-            test -n "$sample"
-          done
-
           scripts/macos_verify_bundle.zsh "$APP"
 
       - name: Import signing certificate
@@ -146,17 +109,82 @@ jobs:
             --preserve-metadata=entitlements \
             --sign "$IDENTITY" "$APP"
           codesign --verify --deep --strict "$APP"
+          expected_team=$(sed -n 's/^APP_UPDATE_TEAM_ID:STRING=//p' build/CMakeCache.txt)
+          actual_team=$(codesign -dv --verbose=4 "$APP" 2>&1 | sed -n 's/^TeamIdentifier=//p')
+          test -n "$expected_team"
+          test "$actual_team" = "$expected_team"
+
+      - name: Verify signed runtime and live sources
+        run: |
+          APP="${GITHUB_WORKSPACE}/install/240-mp-jellyfin.app"
+          BIN="$APP/Contents/Resources/bin"
+          HELPER_HOME="$RUNNER_TEMP/helper-home"
+          mkdir -p "$HELPER_HOME"
+
+          expected_yt_dlp=$(sed -n 's/^YT_DLP_VERSION:STRING=//p' build/CMakeCache.txt)
+          expected_deno=$(sed -n 's/^DENO_VERSION:STRING=//p' build/CMakeCache.txt)
+          test "$(env -i HOME="$HELPER_HOME" PATH=/usr/bin:/bin "$BIN/yt-dlp" --version)" = "$expected_yt_dlp"
+          env -i HOME="$HELPER_HOME" PATH=/usr/bin:/bin "$BIN/deno" --version | head -n 1 | grep -F "deno $expected_deno"
+          env -i HOME="$HELPER_HOME" PATH=/usr/bin:/bin "$BIN/mpv" --version >/dev/null
+          env -i HOME="$HELPER_HOME" PATH=/usr/bin:/bin "$BIN/ffmpeg" -version >/dev/null
+          env -i HOME="$HELPER_HOME" PATH=/usr/bin:/bin "$BIN/ffprobe" -version >/dev/null
 
           SMOKE_MEDIA="$RUNNER_TEMP/mpv-signing-smoke.mkv"
-          "$APP/Contents/Resources/bin/ffmpeg" \
+          "$BIN/ffmpeg" \
             -hide_banner -loglevel error \
             -f lavfi -i "color=c=blue:s=320x180:d=1:r=24" \
             -f lavfi -i "sine=frequency=440:duration=1" \
             -c:v ffv1 -c:a pcm_s16le -shortest "$SMOKE_MEDIA"
-          "$APP/Contents/Resources/bin/mpv" "$SMOKE_MEDIA" \
+          "$BIN/mpv" "$SMOKE_MEDIA" \
             --no-config \
             --script="$APP/Contents/Resources/scripts/mpv-osc.lua" \
+            --script="$APP/Contents/Resources/scripts/media-keys.lua" \
+            --script="$APP/Contents/Resources/scripts/screensaver.lua" \
             --vo=null --ao=null --frames=1
+
+          for channel_id in \
+            UCtPzvwooQ18YZ8Wq8Hka60g \
+            UCBfV298JqKc8o9CM0aANz5A \
+            UCoVB6wMm2pNGMKQTChKCiRQ \
+            UCIauImhx1GGrl7LubRCxXcg \
+            UCNU7LlZ_nKVaq9Lihj0sAHQ \
+            UCR0kPElUivbuZC7Myr7Tg1Q \
+            UCTQHT1Gj_D_Bc7P1REuMoAg \
+            UCPZsA3OSQreeZlKIo6jqUog \
+            UCvgYvYeZe-BANj-cVUd59mQ \
+            UCkXE7x417ME2iudNECaLUFA \
+            UC6m4V2RfKXs4dP3R7AfCK4g \
+            UCqspiYXbxpZpgWzzxUUbTiw \
+            UCdwO61VZMYpozDiAJ6ZI3pg \
+            UC4T6FfTdpvxUrf9-dd4kjpw \
+            UCxuk5azVGJ-aumAds7WMHmg \
+            UCg0i5aSL_2rhf4iztlLmLUQ; do
+            sample=$(env -i HOME="$HELPER_HOME" PATH=/usr/bin:/bin \
+              "$BIN/yt-dlp" --no-config --no-update --no-cache-dir --no-warnings \
+              --flat-playlist --lazy-playlist --playlist-end 1 \
+              --js-runtimes "deno:$BIN/deno" \
+              --print '%(id)s\t%(title)s' \
+              "https://www.youtube.com/channel/$channel_id/videos")
+            test -n "$sample"
+          done
+
+      - name: Notarize and staple app
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          APP="${GITHUB_WORKSPACE}/install/240-mp-jellyfin.app"
+          APP_ZIP="$RUNNER_TEMP/240-mp-jellyfin-app.zip"
+          ditto -c -k --keepParent "$APP" "$APP_ZIP"
+          xcrun notarytool submit "$APP_ZIP" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait
+          xcrun stapler staple "$APP"
+          xcrun stapler validate "$APP"
+          spctl -a -t exec -vv "$APP"
 
       - name: Create DMG
         run: |
@@ -184,6 +212,13 @@ jobs:
             --team-id "$APPLE_TEAM_ID" \
             --wait
           xcrun stapler staple "$DMG"
+          xcrun stapler validate "$DMG"
+          spctl -a -t open --context context:primary-signature -vv "$DMG"
+
+      - name: Create SHA-256 checksum
+        run: |
+          DMG="240-mp-jellyfin-${{ github.ref_name }}-macOS-arm64.dmg"
+          shasum -a 256 "$DMG" > "$DMG.sha256"
 
       - name: Remove signing keychain
         if: always()
@@ -193,7 +228,9 @@ jobs:
         uses: actions/upload-artifact@v4.6.2
         with:
           name: dmg-arm64
-          path: "240-mp-jellyfin-*-macOS-arm64.dmg"
+          path: |
+            240-mp-jellyfin-*-macOS-arm64.dmg
+            240-mp-jellyfin-*-macOS-arm64.dmg.sha256
           if-no-files-found: error
 
   # ──────────────────────────────────────────────────────────────────────────────
@@ -224,6 +261,7 @@ jobs:
           prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-alpha') }}
           files: |
             artifacts/dmg-arm64/*.dmg
+            artifacts/dmg-arm64/*.dmg.sha256
           body: |
             ### Downloads:
 

@@ -27,6 +27,12 @@ FocusScope {
         internalLoader.setSource(resolved, { "navParams": params || {} })
     }
 
+    function updateBackItem(item) {
+        if (navStack.length === 0) return
+        var top = navStack[navStack.length - 1]
+        top.params = Object.assign({}, top.params, { item: item })
+    }
+
     function navigateBack() {
         if (navStack.length === 0) {
             moduleRoot.goBack()
@@ -54,6 +60,7 @@ FocusScope {
             ignoreUnknownSignals: true
             function onNavigateTo(path, params, listState) { moduleRoot.navigateTo(path, params, listState) }
             function onReplaceWith(path, params) { moduleRoot.replaceWith(path, params) }
+            function onUpdateBackItem(item) { moduleRoot.updateBackItem(item) }
             function onGoBack() { moduleRoot.navigateBack() }
         }
     }
