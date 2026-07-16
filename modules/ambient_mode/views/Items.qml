@@ -161,118 +161,42 @@ FocusScope {
         }
 
         // Video Track
-        Item {
+        PlaybackSelectorRow {
             id: videoTrackRow
             anchors.top: playbackSettingsLabel.bottom
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.topMargin: root.sh * 0.0145833 //7
             height: root.sh * 0.0583333 //28
-
-            Rectangle {
-                anchors.fill: parent
-                color: focusRow === 0 ? root.accentColor : "transparent"
-            }
-
-            Text {
-                text: "Video"
-                color: focusRow === 0 ? root.surfaceColor : root.primaryColor
-                font.family: root.globalFont
-                font.capitalization: Font.AllUppercase
-                anchors.verticalCenter: parent.verticalCenter
-                anchors.left: parent.left
-                anchors.leftMargin: root.sw * 0.009375 //6
-                font.pixelSize: root.sh * 0.0416667 //20
-            }
-
-            Row {
-                anchors.verticalCenter: parent.verticalCenter
-                anchors.right: parent.right
-                anchors.rightMargin: root.sw * 0.009375 //6
-                spacing: root.sw * 0.00625 //4
-
-                Text {
-                    text: "◄"
-                    color: focusRow === 0 ? root.surfaceColor : root.tertiaryColor
-                    font.family: root.globalFont
-                    anchors.verticalCenter: parent.verticalCenter
-                    font.pixelSize: root.sh * 0.0375 //18
-                    visible: videoFiles.length > 1
-                }
-                Text {
-                    text: videoFiles[videoIndex].name
-                    color: focusRow === 0 ? root.surfaceColor : root.primaryColor
-                    font.family: root.globalFont
-                    font.capitalization: Font.AllUppercase
-                    anchors.verticalCenter: parent.verticalCenter
-                    font.pixelSize: root.sh * 0.0416667 //20
-                }
-                Text {
-                    text: "►"
-                    color: focusRow === 0 ? root.surfaceColor : root.tertiaryColor
-                    font.family: root.globalFont
-                    anchors.verticalCenter: parent.verticalCenter
-                    font.pixelSize: root.sh * 0.0375 //18
-                    visible: videoFiles.length > 1
-                }
-            }
+            label: "Video"
+            value: videoFiles[videoIndex].name
+            selected: focusRow === 0
+            canGoPrevious: videoFiles.length > 1
+            canGoNext: videoFiles.length > 1
+            primaryColor: root.primaryColor
+            tertiaryColor: root.tertiaryColor
+            accentColor: root.accentColor
+            surfaceColor: root.surfaceColor
+            fontFamily: root.globalFont
         }
 
         // Audio Track
-        Item {
+        PlaybackSelectorRow {
             id: audioTrackRow
             anchors.top: videoTrackRow.bottom
             anchors.left: parent.left
             anchors.right: parent.right
             height: root.sh * 0.0583333 //28
-
-            Rectangle {
-                anchors.fill: parent
-                color: focusRow === 1 ? root.accentColor : "transparent"
-            }
-
-            Text {
-                text: "Audio"
-                color: focusRow === 1 ? root.surfaceColor : root.primaryColor
-                font.family: root.globalFont
-                font.capitalization: Font.AllUppercase
-                anchors.left: parent.left
-                anchors.verticalCenter: parent.verticalCenter
-                anchors.leftMargin: root.sw * 0.009375 //6
-                font.pixelSize: root.sh * 0.0416667 //20
-            }
-
-            Row {
-                anchors.verticalCenter: parent.verticalCenter
-                anchors.right: parent.right
-                anchors.rightMargin: root.sw * 0.009375 //6
-                spacing: root.sw * 0.00625 //4
-
-                Text {
-                    text: "◄"
-                    color: focusRow === 1 ? root.surfaceColor : root.tertiaryColor
-                    font.family: root.globalFont
-                    anchors.verticalCenter: parent.verticalCenter
-                    font.pixelSize: root.sh * 0.0375 //18
-                    visible: audioIndex > 0
-                }
-                Text {
-                    text: audioIndex === 0 ? "VIDEO AUDIO" : audioFiles[audioIndex - 1].name
-                    color: focusRow === 1 ? root.surfaceColor : root.primaryColor
-                    font.family: root.globalFont
-                    font.capitalization: Font.AllUppercase
-                    anchors.verticalCenter: parent.verticalCenter
-                    font.pixelSize: root.sh * 0.0416667 //20
-                }
-                Text {
-                    text: "►"
-                    color: focusRow === 1 ? root.surfaceColor : root.tertiaryColor
-                    font.family: root.globalFont
-                    anchors.verticalCenter: parent.verticalCenter
-                    font.pixelSize: root.sh * 0.0375 //18
-                    visible: audioIndex < audioFiles.length
-                }
-            }
+            label: "Audio"
+            value: audioIndex === 0 ? "VIDEO AUDIO" : audioFiles[audioIndex - 1].name
+            selected: focusRow === 1
+            canGoPrevious: audioIndex > 0
+            canGoNext: audioIndex < audioFiles.length
+            primaryColor: root.primaryColor
+            tertiaryColor: root.tertiaryColor
+            accentColor: root.accentColor
+            surfaceColor: root.surfaceColor
+            fontFamily: root.globalFont
         }
 
         Row {

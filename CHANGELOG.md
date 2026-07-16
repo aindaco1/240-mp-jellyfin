@@ -6,6 +6,7 @@ All notable changes to 240-mp-jellyfin are documented here.
 
 ### Added
 
+- Kept long Loop video and audio filenames inside their playback selectors with a shared bounded row layout and middle elision that preserves recognizable filename beginnings and extensions.
 - Added animated GIF playback to Tumblr montages through a shared static/animated media component; GIF sources are preserved during feed extraction, pause with the montage, and use transitions that keep animation running.
 - Added a persistent Tumblr favorites list with URL normalization, duplicate suppression, quick launch, Save/Remove Favorite controls, and keyboard deletion. QML list/object settings now serialize through the shared `AppCore` JSON path instead of becoming `null`.
 - Ported the relevant upstream 240-MP core improvements for 1.1 without bringing over new modules or non-macOS platform code: unified mpv completion reporting, native GameController navigation, Right Shift as Back, media-key playback controls, menu/paused-playback screen savers, startup-module selection, multiple custom themes, SMPTE colors, auto-crop, output-level controls, directory reset, and settings help/capability filtering.

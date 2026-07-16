@@ -129,6 +129,15 @@ if(BUILD_TESTING)
     target_link_libraries(ambient_mode_backend_tests PRIVATE Qt6::Core Qt6::Test)
     add_test(NAME ambient_mode_backend COMMAND ambient_mode_backend_tests)
 
+    add_executable(ambient_mode_qml_tests
+        tests/AmbientModeQmlTest.cpp
+    )
+    target_compile_definitions(ambient_mode_qml_tests PRIVATE
+        TEST_SOURCE_ROOT="${CMAKE_SOURCE_DIR}"
+    )
+    target_link_libraries(ambient_mode_qml_tests PRIVATE Qt6::Core Qt6::Gui Qt6::Quick Qt6::Qml Qt6::Test)
+    add_test(NAME ambient_mode_qml COMMAND ambient_mode_qml_tests)
+
     add_executable(local_files_backend_tests
         tests/LocalFilesBackendTest.cpp
         src/modules/local_files/LocalFilesBackend.cpp
