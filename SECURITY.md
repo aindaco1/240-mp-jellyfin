@@ -30,6 +30,7 @@ Use GitHub's private vulnerability reporting for this repository when available,
 - yt-dlp and Deno release assets are version-pinned and SHA-256 verified at configure time. Packaged helpers are signed with the rest of the app, and helper updates require reviewing both version and checksum changes.
 - In-app updates only use the repository's latest GitHub Release and require the API-provided SHA-256 asset digest. The DMG and nested app must pass Apple signature/notarization checks; the app must match the running app's Developer ID team, bundle identifier, advertised version, and arm64 architecture. The installer re-verifies immediately before a rollback-safe replacement.
 - Release CI notarizes and staples the app before placing it in the signed/notarized DMG, validates both tickets, and publishes a human-verifiable `.sha256` asset.
+- Release CI uses encrypted App Store Connect API-key credentials, ephemeral credential files/keychains, least-privilege workflow permissions, and commit-pinned GitHub Actions. Release tags must match the compiled app version.
 - Modules should only communicate directly with their intended media service and should only write state under `~/Library/Application Support/240-mp-jellyfin/`.
 
 ## Out Of Scope

@@ -106,7 +106,7 @@ APP_ROOT=$(pwd) ./build/240-mp-jellyfin.app/Contents/MacOS/240-mp-jellyfin
 
 ## Install
 
-See [INSTALL.md](INSTALL.md). The release artifact is a macOS Apple Silicon DMG containing `240-mp-jellyfin.app`.
+See [INSTALL.md](INSTALL.md). The [latest release](https://github.com/aindaco1/240-mp-jellyfin/releases/latest) is a macOS Apple Silicon DMG containing `240-mp-jellyfin.app`.
 
 Signed releases can check, download, verify, and install later versions from **Settings → Software Update**. The updater verifies GitHub's SHA-256 digest, Apple notarization, the Developer ID team, bundle identity, version, and Apple Silicon architecture before replacing the app.
 

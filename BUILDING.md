@@ -113,6 +113,18 @@ Set them inline, e.g. `QML_IMPORT_TRACE=1 APP_ROOT=$(pwd) ./build/240-mp-jellyfi
 
 ## GitHub Actions
 
+### Release credentials
+
+The release workflow uses encrypted repository Actions secrets and App Store Connect API-key notarization. Configure these names without committing their values:
+
+- `APPLE_CERT_P12_BASE64`: base64-encoded Developer ID Application certificate archive.
+- `APPLE_CERT_PASSWORD`: password for that certificate archive.
+- `APPLE_API_KEY_P8_BASE64`: base64-encoded App Store Connect API private key.
+- `APPLE_API_KEY_ID`: App Store Connect API key ID.
+- `APPLE_API_ISSUER_ID`: App Store Connect API issuer ID.
+
+The workflow writes credentials only under the ephemeral runner temp directory, restricts the API key permissions, and deletes both the temporary keychain and credential files in an `always()` cleanup step. GitHub Actions are pinned to reviewed commit SHAs.
+
 ### How to trigger a build
 
 Releases are built automatically when you push a version tag:
@@ -130,6 +142,7 @@ git push origin v1.1.0-rc1
 ```
 
 Tags containing `-rc`, `-beta`, or `-alpha` are published as GitHub pre-releases.
+The numeric portion of the tag must match the version declared in `CMakeLists.txt`; CI rejects mismatched tags before building. Public release notes are generated from that version's section in [CHANGELOG.md](CHANGELOG.md), so finalize the dated changelog entry before tagging.
 
 ### What the workflow does
 

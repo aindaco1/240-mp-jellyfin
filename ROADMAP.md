@@ -1,8 +1,8 @@
 # Roadmap
 
-1.1 focuses the fork on daily-use Apple Silicon macOS playback. It incorporates the relevant upstream core, Local, Loop, and Jellyfin improvements while retaining this fork's Karaoke, Retro, and Tumblr work and avoiding unrelated modules or platform code.
+Version 1.1 completed the fork's daily-use Apple Silicon macOS foundation. Future work stays focused on reliability and depth in the existing modules rather than expanding platform or module scope.
 
-## 1.1 Scope
+## Shipped In 1.1
 
 - Full Jellyfin TV flow: Continue Watching, Up Next, collections/folders, playback negotiation, quality limits, direct-to-transcode fallback, server progress, next-episode autoplay, remembered languages, and capability-gated intro/outro skipping.
 - Shared playback lifecycle and named mpv options used across active modules.
@@ -10,6 +10,8 @@
 - Loop shuffle/auto-launch and bounded recovery for separate audio.
 - Native macOS GameController navigation, Right Shift Back, media keys, menu/paused screen savers, startup module, themes, crop, and output levels.
 - Secure signed in-app updates plus hardened notarized release packaging.
+- Tumblr GIF playback and persistent normalized favorites.
+- Bounded Loop playback selectors for long video and audio filenames.
 
 ## Next 1.x Priorities
 

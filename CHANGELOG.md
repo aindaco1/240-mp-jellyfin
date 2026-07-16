@@ -4,6 +4,8 @@ All notable changes to 240-mp-jellyfin are documented here.
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-07-16
+
 ### Added
 
 - Kept long Loop video and audio filenames inside their playback selectors with a shared bounded row layout and middle elision that preserves recognizable filename beginnings and extensions.
@@ -15,7 +17,12 @@ All notable changes to 240-mp-jellyfin are documented here.
 - Added Local image playback, playlist-relative image handling, safer root-contained symlink browsing, forced/preferred subtitle policies, language selection, configurable still-image duration, extension hiding, and an ask-at-playback shuffle mode.
 - Added Loop video/audio shuffle and auto-launch settings plus bounded separate-audio restart recovery, using the shared bundled-helper resolution path.
 - Added app-shell, Local path-policy, and updater version tests alongside the existing Karaoke and Loop suites.
-- Added SHA-256 checksum assets to the notarized release workflow and notarization validation for both the app bundle and final disk image.
+- Hardened release automation with commit-pinned Actions, least-privilege permissions, tag/version validation, App Store Connect API-key notarization, ephemeral credential cleanup, changelog-derived release notes, SHA-256 assets, and notarization validation for both the app bundle and final disk image.
+- Made Qt's generated MOC include paths reproducible so clean out-of-tree builds also work when macOS resolves the build directory through a symlink such as `/tmp` to `/private/tmp`.
+
+## [1.0] - 2026-06-12
+
+### Added
 
 - Added a Funbox Karaoke module with automatic 24-hour catalog refresh, progressive live search, a persistent duplicate-friendly queue, easy clear/remove/reorder controls, and a manual refresh setting.
 - Added KaraokeNerds, Peareoke, CCKaraokeX, and ObsKure as additional Karaoke catalog sources, including source-specific title cleanup and ranked cross-source deduplication (Funbox, KaraokeNerds, Peareoke, CCKaraokeX, ObsKure) that tolerates case, accents, punctuation, and missing articles.
@@ -58,10 +65,6 @@ All notable changes to 240-mp-jellyfin are documented here.
 - Fixed development YouTube playback accidentally falling through to an outdated system yt-dlp; mpv now receives the pinned helper and Deno paths explicitly and ignores conflicting helper configuration.
 - Fixed Loop's separate-audio playback to use the bundled mpv through the shared helper resolver instead of requiring a Homebrew or system mpv on `PATH`.
 - Reduced Karaoke search and queue title sizes so substantially more of each song name remains visible.
-
-## [1.0] - 2026-06-12
-
-### Added
 
 - Added the Jellyfin module as the primary server-backed media integration.
 - Added Jellyfin password login and Quick Connect.

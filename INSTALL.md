@@ -12,7 +12,7 @@ The packaged app bundles `mpv`, `ffmpeg`, `ffprobe`, pinned standalone `yt-dlp`,
 
 ## Install
 
-1. Download the latest `240-mp-jellyfin-<version>-macOS-arm64.dmg` from GitHub Releases.
+1. Download the latest `240-mp-jellyfin-<version>-macOS-arm64.dmg` from [GitHub Releases](https://github.com/aindaco1/240-mp-jellyfin/releases/latest).
 2. Open the DMG.
 3. Drag `240-mp-jellyfin.app` into `/Applications`.
 4. Launch `240-mp-jellyfin.app`.

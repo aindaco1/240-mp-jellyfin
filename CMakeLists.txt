@@ -8,6 +8,10 @@ endif()
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
+# Keep generated moc includes relative to declared include directories. Besides
+# making moc output reproducible, this avoids broken paths when the build tree
+# is reached through a symlink such as macOS's /tmp -> /private/tmp.
+set(CMAKE_AUTOMOC_PATH_PREFIX ON)
 set(APP_DISPLAY_NAME "240-mp-jellyfin")
 set(APP_BUNDLE_IDENTIFIER "com.240mp.jellyfin" CACHE STRING "macOS bundle identifier")
 set(APP_UPDATE_REPOSITORY "aindaco1/240-mp-jellyfin" CACHE STRING "GitHub update repository")
