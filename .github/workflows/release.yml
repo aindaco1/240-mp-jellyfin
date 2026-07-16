@@ -51,17 +51,12 @@ jobs:
           test -n "$project_version"
           test "$release_base_version" = "$project_version"
 
-      - name: Install Qt 6
-        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4
-        with:
-          version: '6.7.*'
-          host: mac
-          target: desktop
-          arch: clang_64
-          cache: true
-
-      - name: Install package helpers
-        run: brew install mpv ffmpeg
+      - name: Install build and package dependencies
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: 1
+        run: |
+          brew install cmake qt mpv ffmpeg
+          echo "QT_ROOT_DIR=$(brew --prefix qt)" >> "$GITHUB_ENV"
 
       - name: Configure
         run: |

@@ -154,7 +154,7 @@ The intended workflow is a macOS Apple Silicon build:
 |---|---|---|
 | `build-macos-arm64` | `macos-26` (arm64) | `240-mp-jellyfin-<tag>-macOS-arm64.dmg` |
 
-macOS jobs: installs Qt via the Qt CDN, configures CMake for `arm64`, downloads and verifies pinned yt-dlp/Deno, builds and tests, embeds all helpers, runs `macdeployqt`, prunes QML plugins not used by the app, verifies every Mach-O file under a stripped environment (including one live extraction from each Karaoke source), rejects `.DS_Store`, broken symlinks, and external load paths, Developer-ID signs the app and `.dmg`, notarizes and staples both, validates Gatekeeper acceptance, and publishes the DMG plus a SHA-256 checksum file.
+macOS jobs: install Qt and packaging tools from the Apple Silicon runner's Homebrew snapshot, configure CMake for `arm64`, download and verify pinned yt-dlp/Deno, build and test, embed all helpers, run `macdeployqt`, prune QML plugins not used by the app, verify every Mach-O file under a stripped environment (including one live extraction from each Karaoke source), reject `.DS_Store`, broken symlinks, and external load paths, Developer-ID sign the app and `.dmg`, notarize and staple both, validate Gatekeeper acceptance, and publish the DMG plus a SHA-256 checksum file.
 
 The in-app updater consumes the same release. GitHub's API asset digest is mandatory, and the downloaded bundle must pass notarization, signature-team, bundle-ID, version, and arm64 checks before installation.
 
