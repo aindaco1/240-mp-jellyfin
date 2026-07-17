@@ -152,7 +152,7 @@ The intended workflow is a macOS Apple Silicon build:
 
 | Job | Runner | Output |
 |---|---|---|
-| `build-macos-arm64` | `macos-26` (arm64) | `240-mp-jellyfin-<tag>-macOS-arm64.dmg` |
+| `build-macos-arm64` | `macos-15` (arm64) | `240-mp-jellyfin-<tag>-macOS-arm64.dmg` |
 
 macOS jobs: install Qt and packaging tools from the Apple Silicon runner's Homebrew snapshot, configure CMake for `arm64`, download and verify pinned yt-dlp/Deno, build and test, embed all helpers, run `macdeployqt`, prune QML plugins not used by the app, verify every Mach-O file under a stripped environment (including one live extraction from each Karaoke source), reject `.DS_Store`, broken symlinks, and external load paths, Developer-ID sign the app and `.dmg`, notarize and staple both, validate Gatekeeper acceptance, and publish the DMG plus a SHA-256 checksum file.
 
