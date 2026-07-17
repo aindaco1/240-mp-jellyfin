@@ -1,0 +1,128 @@
+name: Recover DMG Notarization
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag with a signed DMG in a draft release
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: recover-dmg-${{ inputs.tag }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  notarize-staple-publish:
+    name: Notarize, staple, and publish signed DMG
+    runs-on: macos-26
+    timeout-minutes: 90
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ inputs.tag }}
+
+    steps:
+      - name: Checkout tagged source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.tag }}
+
+      - name: Validate tag and draft release
+        run: |
+          release_version="${RELEASE_TAG#v}"
+          release_base_version="${release_version%%-*}"
+          project_version=$(sed -nE 's/^project\(240mp VERSION ([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' CMakeLists.txt)
+          test -n "$project_version"
+          test "$release_base_version" = "$project_version"
+
+          release_json=$(gh release view "$RELEASE_TAG" --json isDraft,tagName)
+          test "$(jq -r .tagName <<<"$release_json")" = "$RELEASE_TAG"
+          test "$(jq -r .isDraft <<<"$release_json")" = true
+
+      - name: Download signed draft DMG
+        run: |
+          DMG="240-mp-jellyfin-${RELEASE_TAG}-macOS-arm64.dmg"
+          gh release download "$RELEASE_TAG" --pattern "$DMG" --dir "$RUNNER_TEMP/release"
+          test -s "$RUNNER_TEMP/release/$DMG"
+          echo "DMG=$RUNNER_TEMP/release/$DMG" >> "$GITHUB_ENV"
+
+      - name: Verify signed DMG and enclosed app
+        run: |
+          expected_version="${RELEASE_TAG#v}"
+          expected_version="${expected_version%%-*}"
+          expected_bundle=$(sed -nE 's/^set\(APP_BUNDLE_IDENTIFIER "([^"]+)".*/\1/p' CMakeLists.txt)
+          expected_team=$(sed -nE 's/^set\(APP_UPDATE_TEAM_ID "([^"]+)".*/\1/p' CMakeLists.txt)
+          test -n "$expected_bundle"
+          test -n "$expected_team"
+
+          hdiutil verify "$DMG"
+          codesign --verify --verbose=4 "$DMG"
+          actual_dmg_team=$(codesign -dvvv "$DMG" 2>&1 | sed -n 's/^TeamIdentifier=//p')
+          test "$actual_dmg_team" = "$expected_team"
+          codesign -dvvv "$DMG" 2>&1 | grep -q '^Timestamp='
+
+          mount_dir="$RUNNER_TEMP/release-mount"
+          mkdir -p "$mount_dir"
+          hdiutil attach "$DMG" -readonly -nobrowse -mountpoint "$mount_dir"
+          trap 'hdiutil detach "$mount_dir" >/dev/null' EXIT
+
+          APP="$mount_dir/240-mp-jellyfin.app"
+          test -d "$APP"
+          codesign --verify --deep --strict --verbose=4 "$APP"
+          xcrun stapler validate "$APP"
+
+          actual_bundle=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Contents/Info.plist")
+          actual_version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist")
+          actual_team=$(codesign -dvvv "$APP" 2>&1 | sed -n 's/^TeamIdentifier=//p')
+          executable=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Contents/Info.plist")
+          test "$actual_bundle" = "$expected_bundle"
+          test "$actual_version" = "$expected_version"
+          test "$actual_team" = "$expected_team"
+          lipo -archs "$APP/Contents/MacOS/$executable" | grep -qw arm64
+
+          hdiutil detach "$mount_dir"
+          trap - EXIT
+
+      - name: Prepare notarization credentials
+        env:
+          APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
+        run: |
+          printf '%s' "$APPLE_API_KEY_P8_BASE64" | base64 --decode > "$RUNNER_TEMP/notary-key.p8"
+          chmod 600 "$RUNNER_TEMP/notary-key.p8"
+
+      - name: Notarize and staple DMG
+        env:
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+        run: |
+          xcrun notarytool submit "$DMG" \
+            --key "$RUNNER_TEMP/notary-key.p8" \
+            --key-id "$APPLE_API_KEY_ID" \
+            --issuer "$APPLE_API_ISSUER_ID" \
+            --no-progress \
+            --wait
+          xcrun stapler staple "$DMG"
+          xcrun stapler validate "$DMG"
+          codesign --verify --verbose=4 "$DMG"
+          hdiutil verify "$DMG"
+          spctl -a -t open --context context:primary-signature -vv "$DMG"
+
+      - name: Replace draft asset and publish
+        run: |
+          checksum="$DMG.sha256"
+          shasum -a 256 "$(basename "$DMG")" > "$checksum"
+          gh release upload "$RELEASE_TAG" "$DMG" "$checksum" --clobber
+          gh release edit "$RELEASE_TAG" --draft=false
+        working-directory: ${{ runner.temp }}/release
+
+      - name: Remove notarization credentials
+        if: always()
+        run: rm -f "$RUNNER_TEMP/notary-key.p8"

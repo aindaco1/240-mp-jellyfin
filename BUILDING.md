@@ -159,6 +159,40 @@ The macOS 26 build job installs Qt and packaging tools from the Apple Silicon ru
 
 The in-app updater consumes the same release. GitHub's API asset digest is mandatory, and the downloaded bundle must pass notarization, signature-team, bundle-ID, version, and arm64 checks before installation.
 
+### DMG signing/notarization recovery runbook
+
+The normal release workflow is canonical. Use this recovery only when the app job has completed and produced `notarized-app-arm64`, but the packaging job fails while signing the outer DMG on a hosted runner.
+
+This exact failure occurred during the 1.1 release investigation: `codesign` signed and notarized the app successfully, then returned `No such process` while signing an otherwise valid DMG on hosted macOS runners. The earlier 1.0 DMGs had actually been packaged locally; the `1.0` tag did not match the old workflow's `v*.*` trigger. Comparing those known-good DMGs with the 1.1 candidate confirmed the same UDZO format, APFS image, Developer ID team, secure timestamp, and bundle contents. The regression was therefore in the release transport/host environment, not in the DMG construction command or application bundle.
+
+Keep these failure modes separate:
+
+- `codesign --verify` or `hdiutil verify` fails: the DMG is invalid; rebuild it. Do not submit or publish it.
+- Hosted `codesign` reports `No such process` after the app was signed: recover by signing the DMG on a trusted maintainer Mac.
+- `notarytool submit` prints a submission ID but never prints `Successfully uploaded file`, or exits with signal 10/138: the upload did not finish. An indefinitely `In Progress` record is not evidence that Apple is still scanning it.
+- `notarytool` reports `Network.NWError error 54` / `Connection reset by peer`: retry from GitHub Actions rather than repeatedly creating incomplete local submissions.
+- `gh release upload` reports `tls: bad record MAC`: retry the upload over HTTP/1.1 with `GODEBUG=http2client=0 gh release upload ...`.
+
+The recovery path deliberately separates the two operations at the failure boundary:
+
+1. Download the exact `notarized-app-arm64` artifact from the failed release run.
+2. On a trusted maintainer Mac, extract it with `ditto`, validate the app with `codesign --verify --deep --strict` and `xcrun stapler validate`, create a UDZO DMG with `hdiutil create`, and Developer-ID sign the DMG with a secure timestamp.
+3. Validate the candidate before it leaves the Mac:
+
+   ```bash
+   hdiutil verify 240-mp-jellyfin-v1.1.0-macOS-arm64.dmg
+   codesign --verify --verbose=4 240-mp-jellyfin-v1.1.0-macOS-arm64.dmg
+   codesign -dvvv 240-mp-jellyfin-v1.1.0-macOS-arm64.dmg
+   ```
+
+   Confirm the output shows the expected Developer ID team, a `Timestamp=...` line, and no verification error.
+
+4. Upload only that signed, verified DMG to a **draft** GitHub release for the existing tag. Never publish the unstapled recovery asset.
+5. Run **Actions → Recover DMG Notarization → Run workflow**, entering that tag. The recovery workflow refuses a non-draft release or a mismatched tag/version. It downloads the exact draft asset, verifies the DMG and enclosed app (signature, stapled app ticket, team, bundle ID, version, and arm64 architecture), submits the DMG from GitHub's macOS runner, staples and validates it, replaces the draft asset, creates its SHA-256 file, and only then publishes the release.
+6. Download the published DMG and checksum into a clean directory and repeat `shasum -a 256 -c`, `hdiutil verify`, `codesign --verify`, `xcrun stapler validate`, and the enclosed-app checks. This last download tests what users and the in-app updater will actually receive.
+
+Do not weaken or skip signing/notarization checks to make a release green. Keep the draft private until the recovery workflow has replaced the asset with the stapled DMG and all validations pass.
+
 ## Local Verification
 
 Recommended checks before committing code changes:
