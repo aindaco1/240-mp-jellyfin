@@ -256,16 +256,18 @@ jobs:
             -ov -format UDZO \
             "$DMG"
           hdiutil verify "$DMG"
-          for attempt in 1 2 3; do
-            if codesign --force --timestamp --sign "$SIGNING_IDENTITY" "$DMG"; then
+          codesign --force --timestamp --sign "$SIGNING_IDENTITY" "$DMG"
+          sync
+          sleep 2
+          verified=false
+          for _ in 1 2 3 4 5; do
+            if codesign --verify --verbose=4 "$DMG"; then
+              verified=true
               break
-            fi
-            if [ "$attempt" -eq 3 ]; then
-              exit 1
             fi
             sleep 2
           done
-          codesign --verify "$DMG"
+          test "$verified" = true
 
       - name: Notarize and staple
         env:
