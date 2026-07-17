@@ -33,10 +33,8 @@ jobs:
   # ──────────────────────────────────────────────────────────────────────────────
   build-macos-arm64:
     name: macOS arm64
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 120
-    env:
-      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
 
     steps:
       - name: Checkout
@@ -231,13 +229,79 @@ jobs:
           xcrun stapler staple "$APP"
           xcrun stapler validate "$APP"
           spctl -a -t exec -vv "$APP"
+          ditto -c -k --keepParent "$APP" \
+            "$GITHUB_WORKSPACE/240-mp-jellyfin-notarized-app.zip"
 
-      - name: Create DMG
+      - name: Remove signing keychain
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/signing.keychain-db" || true
+          rm -f "$RUNNER_TEMP/cert.p12" "$RUNNER_TEMP/notary-key.p8"
+
+      - name: Upload notarized app
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: notarized-app-arm64
+          path: 240-mp-jellyfin-notarized-app.zip
+          if-no-files-found: error
+
+  package-macos-arm64:
+    name: Package macOS arm64
+    needs: [build-macos-arm64]
+    runs-on: macos-15
+    timeout-minutes: 60
+
+    steps:
+      - name: Download notarized app
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: notarized-app-arm64
+          path: artifacts/app
+
+      - name: Extract and verify notarized app
+        run: |
+          mkdir -p install
+          ditto -x -k artifacts/app/240-mp-jellyfin-notarized-app.zip install
+          APP="$GITHUB_WORKSPACE/install/240-mp-jellyfin.app"
+          test -d "$APP"
+          codesign --verify --deep --strict --verbose=4 "$APP"
+          xcrun stapler validate "$APP"
+
+      - name: Import signing certificate
+        env:
+          CERT_P12: ${{ secrets.APPLE_CERT_P12_BASE64 }}
+          CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+        run: |
+          KEYCHAIN_PATH="$RUNNER_TEMP/signing.keychain-db"
+          KEYCHAIN_PASS=$(openssl rand -hex 16)
+          printf '%s' "$CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$KEYCHAIN_PASS" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASS" "$KEYCHAIN_PATH"
+          security import "$RUNNER_TEMP/cert.p12" \
+            -k "$KEYCHAIN_PATH" -P "$CERT_PASSWORD" \
+            -T /usr/bin/codesign -T /usr/bin/security
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASS" "$KEYCHAIN_PATH"
+          identity_hash=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" \
+            | sed -nE 's/^[[:space:]]*[0-9]+\) ([[:xdigit:]]+) .*/\1/p' | head -n 1)
+          test -n "$identity_hash"
+          echo "SIGNING_IDENTITY=$identity_hash" >> "$GITHUB_ENV"
+          echo "SIGNING_KEYCHAIN=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+
+      - name: Prepare notarization credentials
+        env:
+          APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
+        run: |
+          printf '%s' "$APPLE_API_KEY_P8_BASE64" | base64 --decode > "$RUNNER_TEMP/notary-key.p8"
+          chmod 600 "$RUNNER_TEMP/notary-key.p8"
+
+      - name: Create and sign DMG
         run: |
           DMG="240-mp-jellyfin-${{ env.RELEASE_TAG }}-macOS-arm64.dmg"
           hdiutil create \
             -volname "240-mp-jellyfin" \
-            -srcfolder "${GITHUB_WORKSPACE}/install" \
+            -srcfolder "$GITHUB_WORKSPACE/install" \
             -ov -format UDZO \
             "$DMG"
           hdiutil verify "$DMG"
@@ -246,19 +310,9 @@ jobs:
             --sign "$SIGNING_IDENTITY" \
             "$DMG"
           codesign --display --verbose=4 "$DMG"
-          sync
-          sleep 2
-          verified=false
-          for _ in 1 2 3 4 5; do
-            if codesign --verify --verbose=4 "$DMG"; then
-              verified=true
-              break
-            fi
-            sleep 2
-          done
-          test "$verified" = true
+          codesign --verify --verbose=4 "$DMG"
 
-      - name: Notarize and staple
+      - name: Notarize and staple DMG
         env:
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
@@ -284,7 +338,7 @@ jobs:
           security delete-keychain "$RUNNER_TEMP/signing.keychain-db" || true
           rm -f "$RUNNER_TEMP/cert.p12" "$RUNNER_TEMP/notary-key.p8"
 
-      - name: Upload artifact
+      - name: Upload DMG
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: dmg-arm64
@@ -298,7 +352,7 @@ jobs:
   # ──────────────────────────────────────────────────────────────────────────────
   release:
     name: Publish Release
-    needs: [build-macos-arm64]
+    needs: [package-macos-arm64]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
