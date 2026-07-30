@@ -83,12 +83,17 @@ fi
 updated_rpaths=0
 while IFS= read -r binary; do
     file -b "$binary" | grep -q 'Mach-O' || continue
+    removed_signature=false
     rpaths=("${(@f)$(otool -l "$binary" | awk '
         $1 == "cmd" && $2 == "LC_RPATH" { in_rpath = 1; next }
         in_rpath && $1 == "path" { print $2; in_rpath = 0 }
     ')}")
     for rpath in "${rpaths[@]}"; do
         [[ "$rpath" == /* && "$rpath" != /System/* && "$rpath" != /usr/lib/* ]] || continue
+        if [[ "$removed_signature" == false ]]; then
+            codesign --remove-signature "$binary" >/dev/null 2>&1 || true
+            removed_signature=true
+        fi
         install_name_tool -delete_rpath "$rpath" "$binary"
         (( ++updated_rpaths ))
     done
