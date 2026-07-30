@@ -28,6 +28,7 @@ struct CatalogSource {
     QString id;
     QString channelId;
     QString url;
+    int introducedInSchema = 1;
     int minimumItems = kMinimumCatalogItems;
 };
 
@@ -47,87 +48,110 @@ const QString kLemmyCautionSourceId = QStringLiteral("lemmy_caution_karaoke");
 const QString kOneMusicSourceId = QStringLiteral("one_music_karaoke");
 const QString kJanetEmailSourceId = QStringLiteral("janet_email_karaoke");
 const QString kCouchPotatoSourceId = QStringLiteral("couch_potato_karaoke");
+const QString kJustSingKaraokeSourceId = QStringLiteral("just_sing_karaoke");
 const QList<CatalogSource> kCatalogSources{
     {
         kFunboxSourceId,
         QStringLiteral("UCtPzvwooQ18YZ8Wq8Hka60g"),
-        QStringLiteral("https://www.youtube.com/channel/UCtPzvwooQ18YZ8Wq8Hka60g/videos")
+        QStringLiteral("https://www.youtube.com/channel/UCtPzvwooQ18YZ8Wq8Hka60g/videos"),
+        1
     },
     {
         kKaraokeNerdsSourceId,
         QStringLiteral("UCBfV298JqKc8o9CM0aANz5A"),
-        QStringLiteral("https://www.youtube.com/channel/UCBfV298JqKc8o9CM0aANz5A/videos")
+        QStringLiteral("https://www.youtube.com/channel/UCBfV298JqKc8o9CM0aANz5A/videos"),
+        3
     },
     {
         kJLoInstruSourceId,
         QStringLiteral("UCoVB6wMm2pNGMKQTChKCiRQ"),
-        QStringLiteral("https://www.youtube.com/channel/UCoVB6wMm2pNGMKQTChKCiRQ/videos")
+        QStringLiteral("https://www.youtube.com/channel/UCoVB6wMm2pNGMKQTChKCiRQ/videos"),
+        7
     },
     {
         kOffbeatKaraokeSourceId,
         QStringLiteral("UCIauImhx1GGrl7LubRCxXcg"),
-        QStringLiteral("https://www.youtube.com/channel/UCIauImhx1GGrl7LubRCxXcg/videos")
+        QStringLiteral("https://www.youtube.com/channel/UCIauImhx1GGrl7LubRCxXcg/videos"),
+        7
     },
     {
         kPeareokeSourceId,
         QStringLiteral("UCNU7LlZ_nKVaq9Lihj0sAHQ"),
-        QStringLiteral("https://www.youtube.com/channel/UCNU7LlZ_nKVaq9Lihj0sAHQ/videos")
+        QStringLiteral("https://www.youtube.com/channel/UCNU7LlZ_nKVaq9Lihj0sAHQ/videos"),
+        3
     },
     {
         kKaraokeOfficeSourceId,
         QStringLiteral("UCR0kPElUivbuZC7Myr7Tg1Q"),
-        QStringLiteral("https://www.youtube.com/channel/UCR0kPElUivbuZC7Myr7Tg1Q/videos")
+        QStringLiteral("https://www.youtube.com/channel/UCR0kPElUivbuZC7Myr7Tg1Q/videos"),
+        10
     },
     {
         kCCKaraokeSourceId,
         QStringLiteral("UCTQHT1Gj_D_Bc7P1REuMoAg"),
-        QStringLiteral("https://www.youtube.com/channel/UCTQHT1Gj_D_Bc7P1REuMoAg/videos")
+        QStringLiteral("https://www.youtube.com/channel/UCTQHT1Gj_D_Bc7P1REuMoAg/videos"),
+        4
     },
     {
         kNickyDeeKaraokeSourceId,
         QStringLiteral("UC6m4V2RfKXs4dP3R7AfCK4g"),
-        QStringLiteral("https://www.youtube.com/channel/UC6m4V2RfKXs4dP3R7AfCK4g/videos")
+        QStringLiteral("https://www.youtube.com/channel/UC6m4V2RfKXs4dP3R7AfCK4g/videos"),
+        9
     },
     {
         kBalkaKaraokeSourceId,
         QStringLiteral("UCqspiYXbxpZpgWzzxUUbTiw"),
-        QStringLiteral("https://www.youtube.com/channel/UCqspiYXbxpZpgWzzxUUbTiw/videos")
+        QStringLiteral("https://www.youtube.com/channel/UCqspiYXbxpZpgWzzxUUbTiw/videos"),
+        9
     },
     {
         kPantsKaraokeSourceId,
         QStringLiteral("UCPZsA3OSQreeZlKIo6jqUog"),
-        QStringLiteral("https://www.youtube.com/channel/UCPZsA3OSQreeZlKIo6jqUog/videos")
+        QStringLiteral("https://www.youtube.com/channel/UCPZsA3OSQreeZlKIo6jqUog/videos"),
+        8
     },
     {
         kKaraokeArrSourceId,
         QStringLiteral("UCvgYvYeZe-BANj-cVUd59mQ"),
-        QStringLiteral("https://www.youtube.com/channel/UCvgYvYeZe-BANj-cVUd59mQ/videos")
+        QStringLiteral("https://www.youtube.com/channel/UCvgYvYeZe-BANj-cVUd59mQ/videos"),
+        8
     },
     {
         kObsKureSourceId,
         QStringLiteral("UCkXE7x417ME2iudNECaLUFA"),
-        QStringLiteral("https://www.youtube.com/channel/UCkXE7x417ME2iudNECaLUFA/videos")
+        QStringLiteral("https://www.youtube.com/channel/UCkXE7x417ME2iudNECaLUFA/videos"),
+        2
     },
     {
         kOneMusicSourceId,
         QStringLiteral("UCdwO61VZMYpozDiAJ6ZI3pg"),
-        QStringLiteral("https://www.youtube.com/channel/UCdwO61VZMYpozDiAJ6ZI3pg/videos")
+        QStringLiteral("https://www.youtube.com/channel/UCdwO61VZMYpozDiAJ6ZI3pg/videos"),
+        6
     },
     {
         kJanetEmailSourceId,
         QStringLiteral("UC4T6FfTdpvxUrf9-dd4kjpw"),
-        QStringLiteral("https://www.youtube.com/channel/UC4T6FfTdpvxUrf9-dd4kjpw/videos")
+        QStringLiteral("https://www.youtube.com/channel/UC4T6FfTdpvxUrf9-dd4kjpw/videos"),
+        6
     },
     {
         kCouchPotatoSourceId,
         QStringLiteral("UCxuk5azVGJ-aumAds7WMHmg"),
         QStringLiteral("https://www.youtube.com/channel/UCxuk5azVGJ-aumAds7WMHmg/videos"),
+        6,
         50
     },
     {
         kLemmyCautionSourceId,
         QStringLiteral("UCg0i5aSL_2rhf4iztlLmLUQ"),
-        QStringLiteral("https://www.youtube.com/channel/UCg0i5aSL_2rhf4iztlLmLUQ/videos")
+        QStringLiteral("https://www.youtube.com/channel/UCg0i5aSL_2rhf4iztlLmLUQ/videos"),
+        5
+    },
+    {
+        kJustSingKaraokeSourceId,
+        QStringLiteral("UCM8kkIU5aIzCbyZawksZ2Bw"),
+        QStringLiteral("https://www.youtube.com/channel/UCM8kkIU5aIzCbyZawksZ2Bw/videos"),
+        11
     }
 };
 constexpr int kCatalogBatchSize = 64;
@@ -725,6 +749,19 @@ QString withoutOffbeatKaraokeQualifier(const QString &title)
     return cleaned;
 }
 
+QString withoutJustSingKaraokeBranding(QString title)
+{
+    static const QRegularExpression karaokeMarker(
+        QStringLiteral(
+            "\\s*(?:-\\s*)?\\(\\s*"
+            "(?:(?:High\\s+Quality\\s+)?Karaoke(?:\\s+Version)?|"
+            "Karaoke\\s+(?:Alta\\s+Qualidade|Com\\s+Letra))"
+            "\\s*\\)"),
+        QRegularExpression::CaseInsensitiveOption);
+    title.remove(karaokeMarker);
+    return title.trimmed();
+}
+
 QString sourceIdForChannelId(const QString &channelId)
 {
     for (const CatalogSource &source : kCatalogSources) {
@@ -864,6 +901,8 @@ QString KaraokeBackend::cleanedTitle(const QString &rawTitle,
         cleaned = normalizedPantsTitle(cleaned);
     if (sourceId == kKaraokeOfficeSourceId)
         cleaned = normalizedKaraokeOfficeTitle(cleaned);
+    if (sourceId == kJustSingKaraokeSourceId)
+        cleaned = withoutJustSingKaraokeBranding(cleaned);
 
     // Some ObsKure generations place quality/mix labels immediately before
     // the Karaoke suffix. Strip only that anchored trailing descriptor chain
@@ -1277,80 +1316,17 @@ bool KaraokeBackend::loadCatalogCache()
         QStringLiteral("sourceChannelIds")).toArray();
     for (const QJsonValue &value : cachedChannelIds)
         cachedIds.insert(value.toString());
-    QSet<QString> currentIds;
-    QSet<QString> legacyTwoSourceIds;
-    QSet<QString> legacyFourSourceIds;
-    QSet<QString> legacyFiveSourceIds;
-    QSet<QString> legacySixSourceIds;
-    QSet<QString> legacyNineSourceIds;
-    QSet<QString> legacyElevenSourceIds;
-    QSet<QString> legacyThirteenSourceIds;
-    QSet<QString> legacyFifteenSourceIds;
-    for (const CatalogSource &source : kCatalogSources) {
-        currentIds.insert(source.channelId);
-        if (source.id == kFunboxSourceId || source.id == kObsKureSourceId)
-            legacyTwoSourceIds.insert(source.channelId);
-        const bool wasFourSourceProvider =
-            source.id == kFunboxSourceId ||
-            source.id == kKaraokeNerdsSourceId ||
-            source.id == kPeareokeSourceId ||
-            source.id == kObsKureSourceId;
-        if (wasFourSourceProvider)
-            legacyFourSourceIds.insert(source.channelId);
-        if (wasFourSourceProvider || source.id == kCCKaraokeSourceId)
-            legacyFiveSourceIds.insert(source.channelId);
-        if (wasFourSourceProvider || source.id == kCCKaraokeSourceId ||
-            source.id == kLemmyCautionSourceId) {
-            legacySixSourceIds.insert(source.channelId);
+    QSet<QString> expectedIds;
+    if (schemaVersion >= 2 && schemaVersion <= kCatalogSchemaVersion) {
+        for (const CatalogSource &source : kCatalogSources) {
+            if (source.introducedInSchema <= schemaVersion)
+                expectedIds.insert(source.channelId);
         }
-        if (source.id != kJLoInstruSourceId &&
-            source.id != kOffbeatKaraokeSourceId &&
-            source.id != kPantsKaraokeSourceId &&
-            source.id != kKaraokeArrSourceId &&
-            source.id != kNickyDeeKaraokeSourceId &&
-            source.id != kBalkaKaraokeSourceId &&
-            source.id != kKaraokeOfficeSourceId) {
-            legacyNineSourceIds.insert(source.channelId);
-        }
-        if (source.id != kPantsKaraokeSourceId &&
-            source.id != kKaraokeArrSourceId &&
-            source.id != kNickyDeeKaraokeSourceId &&
-            source.id != kBalkaKaraokeSourceId &&
-            source.id != kKaraokeOfficeSourceId) {
-            legacyElevenSourceIds.insert(source.channelId);
-        }
-        if (source.id != kNickyDeeKaraokeSourceId &&
-            source.id != kBalkaKaraokeSourceId &&
-            source.id != kKaraokeOfficeSourceId) {
-            legacyThirteenSourceIds.insert(source.channelId);
-        }
-        if (source.id != kKaraokeOfficeSourceId)
-            legacyFifteenSourceIds.insert(source.channelId);
     }
-    const bool legacyTwoSourceCache = schemaVersion == 2 &&
-                                      cachedIds == legacyTwoSourceIds;
-    const bool legacyFourSourceCache = schemaVersion == 3 &&
-                                       cachedIds == legacyFourSourceIds;
-    const bool legacyFiveSourceCache = schemaVersion == 4 &&
-                                       cachedIds == legacyFiveSourceIds;
-    const bool legacySixSourceCache = schemaVersion == 5 &&
-                                      cachedIds == legacySixSourceIds;
-    const bool legacyNineSourceCache = schemaVersion == 6 &&
-                                       cachedIds == legacyNineSourceIds;
-    const bool legacyElevenSourceCache = schemaVersion == 7 &&
-                                         cachedIds == legacyElevenSourceIds;
-    const bool legacyThirteenSourceCache = schemaVersion == 8 &&
-                                           cachedIds == legacyThirteenSourceIds;
-    const bool legacyFifteenSourceCache = schemaVersion == 9 &&
-                                          cachedIds == legacyFifteenSourceIds;
-    const bool currentSourceCache = schemaVersion == kCatalogSchemaVersion &&
-                                    cachedIds == currentIds;
-    if (!legacyFunboxCache && !legacyTwoSourceCache &&
-        !legacyFourSourceCache && !legacyFiveSourceCache &&
-        !legacySixSourceCache && !legacyNineSourceCache &&
-        !legacyElevenSourceCache && !legacyThirteenSourceCache &&
-        !legacyFifteenSourceCache &&
-        !currentSourceCache) {
+    const bool multiSourceCache = schemaVersion >= 2 &&
+                                  schemaVersion <= kCatalogSchemaVersion &&
+                                  cachedIds == expectedIds;
+    if (!legacyFunboxCache && !multiSourceCache) {
         return false;
     }
 
@@ -1401,11 +1377,9 @@ bool KaraokeBackend::loadCatalogCache()
     }
     // Prior catalogs remain useful immediately, but must refresh in the
     // background to add every configured source and write the current schema.
-    m_catalogFetchedAt = legacyFunboxCache || legacyTwoSourceCache ||
-                         legacyFourSourceCache || legacyFiveSourceCache ||
-                         legacySixSourceCache || legacyNineSourceCache ||
-                         legacyElevenSourceCache || legacyThirteenSourceCache
-                         || legacyFifteenSourceCache
+    const bool legacyCache = legacyFunboxCache ||
+                             schemaVersion < kCatalogSchemaVersion;
+    m_catalogFetchedAt = legacyCache
         ? QDateTime{}
         : QDateTime::fromString(
               root.value(QStringLiteral("fetchedAt")).toString(), Qt::ISODate);

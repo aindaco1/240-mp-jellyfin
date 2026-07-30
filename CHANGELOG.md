@@ -4,6 +4,12 @@ All notable changes to 240-mp-jellyfin are documented here.
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-07-29
+
+### Added
+
+- Added Just Sing Karaoke as the seventeenth Karaoke catalog source and lowest duplicate priority, with shared source-registry cache migration and cleanup for its English and Portuguese Karaoke markers.
+
 ## [1.1.0] - 2026-07-16
 
 ### Added

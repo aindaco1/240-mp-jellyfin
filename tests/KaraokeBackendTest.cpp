@@ -33,6 +33,7 @@ private slots:
     void loadsLegacyElevenSourceCatalogCache();
     void loadsLegacyThirteenSourceCatalogCache();
     void loadsLegacyFifteenSourceCatalogCache();
+    void loadsLegacySixteenSourceCatalogCache();
     void loadsCurrentCatalogCache();
     void persistsAndMutatesQueue();
     void usesCachedPlaybackMedia();
@@ -628,6 +629,28 @@ void KaraokeBackendTest::cleansProviderTitles()
                  qPrintable(rawTitle + QStringLiteral(" => ") + displayTitle));
     }
 
+    QCOMPARE(
+        KaraokeBackend::cleanedTitle(
+            QStringLiteral("The Strokes - Dine N'Dash (Karaoke version)"),
+            QStringLiteral("just_sing_karaoke")),
+        QStringLiteral("The Strokes - Dine N'Dash"));
+    QCOMPARE(
+        KaraokeBackend::cleanedTitle(
+            QStringLiteral(
+                "The Voidz - Leave It In My Dreams (High Quality Karaoke version)"),
+            QStringLiteral("just_sing_karaoke")),
+        QStringLiteral("The Voidz - Leave It In My Dreams"));
+    QCOMPARE(
+        KaraokeBackend::cleanedTitle(
+            QStringLiteral("Titãs - Epitáfio (Karaoke alta qualidade)"),
+            QStringLiteral("just_sing_karaoke")),
+        QStringLiteral("Titãs - Epitáfio"));
+    QCOMPARE(
+        KaraokeBackend::cleanedTitle(
+            QStringLiteral("Shalon Israel - Cabeça de Gelo (Karaoke com letra)"),
+            QStringLiteral("just_sing_karaoke")),
+        QStringLiteral("Shalon Israel - Cabeça de Gelo"));
+
     QCOMPARE(KaraokeBackend::cleanedTitle(
                  QStringLiteral("Artist - Song - Karaoke - Instrumental")),
              QStringLiteral("Artist - Song - Instrumental"));
@@ -870,6 +893,20 @@ void KaraokeBackendTest::validatesCatalogSongs()
     QCOMPARE(lemmyCautionSong.value(QStringLiteral("sourceId")).toString(),
              QStringLiteral("lemmy_caution_karaoke"));
 
+    const QJsonObject justSingKaraoke{
+        {QStringLiteral("id"), QStringLiteral("9p4otqDAXQs")},
+        {QStringLiteral("title"),
+         QStringLiteral("The Strokes - Dine N'Dash (Karaoke version)")},
+        {QStringLiteral("playlist_channel_id"),
+         QStringLiteral("UCM8kkIU5aIzCbyZawksZ2Bw")}
+    };
+    const QVariantMap justSingSong = KaraokeBackend::catalogSongFromJson(
+        justSingKaraoke);
+    QCOMPARE(justSingSong.value(QStringLiteral("displayTitle")).toString(),
+             QStringLiteral("The Strokes - Dine N'Dash"));
+    QCOMPARE(justSingSong.value(QStringLiteral("sourceId")).toString(),
+             QStringLiteral("just_sing_karaoke"));
+
     QJsonObject wrongChannel = valid;
     wrongChannel[QStringLiteral("channel_id")] = QStringLiteral("wrong-channel");
     QVERIFY(KaraokeBackend::catalogSongFromJson(wrongChannel).isEmpty());
@@ -923,7 +960,8 @@ void KaraokeBackendTest::deduplicatesCatalogBySourcePriority()
         QStringLiteral("one_music_karaoke"),
         QStringLiteral("janet_email_karaoke"),
         QStringLiteral("couch_potato_karaoke"),
-        QStringLiteral("lemmy_caution_karaoke")
+        QStringLiteral("lemmy_caution_karaoke"),
+        QStringLiteral("just_sing_karaoke")
     };
     QVariantList candidates;
     for (int winningPriority = 0; winningPriority < sourceIds.size(); ++winningPriority) {
@@ -1674,7 +1712,7 @@ void KaraokeBackendTest::loadsLegacyFifteenSourceCatalogCache()
              QStringLiteral("Artist - Song (2004)"));
 }
 
-void KaraokeBackendTest::loadsCurrentCatalogCache()
+void KaraokeBackendTest::loadsLegacySixteenSourceCatalogCache()
 {
     QTemporaryDir dataRoot;
     QVERIFY(dataRoot.isValid());
@@ -1700,6 +1738,64 @@ void KaraokeBackendTest::loadsCurrentCatalogCache()
             QStringLiteral("UCg0i5aSL_2rhf4iztlLmLUQ")
         }},
         {QStringLiteral("sourceItemCounts"), QJsonObject{
+            {QStringLiteral("funbox"), 1}
+        }},
+        {QStringLiteral("fetchedAt"),
+         QDateTime::currentDateTimeUtc().toString(Qt::ISODate)},
+        {QStringLiteral("items"), QJsonArray{
+            QJsonObject{
+                {QStringLiteral("videoId"), QStringLiteral("abcDEF123_-")},
+                {QStringLiteral("rawTitle"),
+                 QStringLiteral("Artist - Song (Funbox Karaoke, 2004)")},
+                {QStringLiteral("sourceId"), QStringLiteral("funbox")}
+            }
+        }}
+    };
+    QFile file(dataRoot.filePath(QStringLiteral("karaoke_catalog.json")));
+    QVERIFY(file.open(QIODevice::WriteOnly));
+    QVERIFY(file.write(QJsonDocument(cache).toJson(QJsonDocument::Compact)) > 0);
+    file.close();
+
+    KaraokeBackend backend(QStringLiteral("/missing-app-root"), dataRoot.path());
+    QSignalSpy resetSpy(&backend, &KaraokeBackend::catalogReset);
+    QSignalSpy finishedSpy(&backend, &KaraokeBackend::catalogLoadFinished);
+    backend.loadCatalog();
+
+    QCOMPARE(resetSpy.size(), 1);
+    QCOMPARE(finishedSpy.size(), 1);
+    const QVariantList items = resetSpy.first().at(0).toList();
+    QCOMPARE(items.size(), 1);
+    QCOMPARE(items.first().toMap().value(QStringLiteral("displayTitle")).toString(),
+             QStringLiteral("Artist - Song (2004)"));
+}
+
+void KaraokeBackendTest::loadsCurrentCatalogCache()
+{
+    QTemporaryDir dataRoot;
+    QVERIFY(dataRoot.isValid());
+
+    const QJsonObject cache{
+        {QStringLiteral("schemaVersion"), 11},
+        {QStringLiteral("sourceChannelIds"), QJsonArray{
+            QStringLiteral("UCtPzvwooQ18YZ8Wq8Hka60g"),
+            QStringLiteral("UCBfV298JqKc8o9CM0aANz5A"),
+            QStringLiteral("UCoVB6wMm2pNGMKQTChKCiRQ"),
+            QStringLiteral("UCIauImhx1GGrl7LubRCxXcg"),
+            QStringLiteral("UCNU7LlZ_nKVaq9Lihj0sAHQ"),
+            QStringLiteral("UCR0kPElUivbuZC7Myr7Tg1Q"),
+            QStringLiteral("UCTQHT1Gj_D_Bc7P1REuMoAg"),
+            QStringLiteral("UCPZsA3OSQreeZlKIo6jqUog"),
+            QStringLiteral("UCvgYvYeZe-BANj-cVUd59mQ"),
+            QStringLiteral("UCkXE7x417ME2iudNECaLUFA"),
+            QStringLiteral("UC6m4V2RfKXs4dP3R7AfCK4g"),
+            QStringLiteral("UCqspiYXbxpZpgWzzxUUbTiw"),
+            QStringLiteral("UCdwO61VZMYpozDiAJ6ZI3pg"),
+            QStringLiteral("UC4T6FfTdpvxUrf9-dd4kjpw"),
+            QStringLiteral("UCxuk5azVGJ-aumAds7WMHmg"),
+            QStringLiteral("UCg0i5aSL_2rhf4iztlLmLUQ"),
+            QStringLiteral("UCM8kkIU5aIzCbyZawksZ2Bw")
+        }},
+        {QStringLiteral("sourceItemCounts"), QJsonObject{
             {QStringLiteral("jlo_instru"), 2},
             {QStringLiteral("offbeat_karaoke"), 1},
             {QStringLiteral("karaoke_office"), 1},
@@ -1709,7 +1805,8 @@ void KaraokeBackendTest::loadsCurrentCatalogCache()
             {QStringLiteral("nicky_dee_karaoke"), 1},
             {QStringLiteral("balka_karaoke"), 1},
             {QStringLiteral("one_music_karaoke"), 2},
-            {QStringLiteral("lemmy_caution_karaoke"), 1}
+            {QStringLiteral("lemmy_caution_karaoke"), 1},
+            {QStringLiteral("just_sing_karaoke"), 1}
         }},
         {QStringLiteral("fetchedAt"),
          QDateTime::currentDateTimeUtc().toString(Qt::ISODate)},
@@ -1822,6 +1919,14 @@ void KaraokeBackendTest::loadsCurrentCatalogCache()
                  QStringLiteral("lemmy_caution_karaoke")}
             },
             QJsonObject{
+                {QStringLiteral("videoId"), QStringLiteral("JustSing001")},
+                {QStringLiteral("rawTitle"),
+                 QStringLiteral("Titãs - Epitáfio (Karaoke alta qualidade)")},
+                {QStringLiteral("displayTitle"),
+                 QStringLiteral("stale cached just sing title")},
+                {QStringLiteral("sourceId"), QStringLiteral("just_sing_karaoke")}
+            },
+            QJsonObject{
                 {QStringLiteral("videoId"), QStringLiteral("trFzmVZ1Q0o")},
                 {QStringLiteral("rawTitle"),
                  QStringLiteral(
@@ -1845,7 +1950,7 @@ void KaraokeBackendTest::loadsCurrentCatalogCache()
     QCOMPARE(resetSpy.size(), 1);
     QCOMPARE(finishedSpy.size(), 1);
     const QVariantList items = resetSpy.first().at(0).toList();
-    QCOMPARE(items.size(), 13);
+    QCOMPARE(items.size(), 14);
     QCOMPARE(items.at(0).toMap().value(QStringLiteral("displayTitle")).toString(),
              QStringLiteral("Sigur Rós - Gold"));
     QCOMPARE(items.at(1).toMap().value(QStringLiteral("displayTitle")).toString(),
@@ -1872,6 +1977,8 @@ void KaraokeBackendTest::loadsCurrentCatalogCache()
              QStringLiteral("Lady Gaga - Bad Romance"));
     QCOMPARE(items.at(12).toMap().value(QStringLiteral("displayTitle")).toString(),
              QStringLiteral("talking heads - psycho killer (Stop Making Sense)"));
+    QCOMPARE(items.at(13).toMap().value(QStringLiteral("displayTitle")).toString(),
+             QStringLiteral("Titãs - Epitáfio"));
 }
 
 void KaraokeBackendTest::persistsAndMutatesQueue()
@@ -2003,7 +2110,7 @@ void KaraokeBackendTest::refreshesLiveCatalog()
     QVERIFY(cache.open(QIODevice::ReadOnly));
     const QJsonDocument cacheDocument = QJsonDocument::fromJson(cache.readAll());
     QVERIFY(cacheDocument.isObject());
-    QCOMPARE(cacheDocument.object().value(QStringLiteral("schemaVersion")).toInt(), 10);
+    QCOMPARE(cacheDocument.object().value(QStringLiteral("schemaVersion")).toInt(), 11);
     const QJsonObject sourceItemCounts = cacheDocument.object().value(
         QStringLiteral("sourceItemCounts")).toObject();
     QVERIFY(sourceItemCounts.value(QStringLiteral("funbox")).toInt() >= 100);
@@ -2023,6 +2130,7 @@ void KaraokeBackendTest::refreshesLiveCatalog()
     QVERIFY(sourceItemCounts.value(QStringLiteral("couch_potato_karaoke")).toInt() >= 50);
     QVERIFY(sourceItemCounts.value(
         QStringLiteral("lemmy_caution_karaoke")).toInt() >= 100);
+    QVERIFY(sourceItemCounts.value(QStringLiteral("just_sing_karaoke")).toInt() >= 100);
 
     QHash<QString, int> visibleCounts;
     QHash<QString, QString> visibleSourceByKey;
@@ -2085,7 +2193,8 @@ void KaraokeBackendTest::refreshesLiveCatalog()
             sourceId == QStringLiteral("pants_karaoke") ||
             sourceId == QStringLiteral("karaoke_arr") ||
             sourceId == QStringLiteral("nicky_dee_karaoke") ||
-            sourceId == QStringLiteral("balka_karaoke")) {
+            sourceId == QStringLiteral("balka_karaoke") ||
+            sourceId == QStringLiteral("just_sing_karaoke")) {
             QVERIFY2(!displayTitle.endsWith(QStringLiteral("(Karaoke)"),
                                             Qt::CaseInsensitive),
                      qPrintable(sourceId + QStringLiteral(": ")
@@ -2105,6 +2214,17 @@ void KaraokeBackendTest::refreshesLiveCatalog()
                     Qt::CaseInsensitive));
                 QVERIFY(!displayTitle.contains(
                     QStringLiteral("Pants Karaoke Version of"),
+                    Qt::CaseInsensitive));
+            }
+            if (sourceId == QStringLiteral("just_sing_karaoke")) {
+                QVERIFY(!displayTitle.contains(
+                    QStringLiteral("High Quality Karaoke"),
+                    Qt::CaseInsensitive));
+                QVERIFY(!displayTitle.contains(
+                    QStringLiteral("Karaoke alta qualidade"),
+                    Qt::CaseInsensitive));
+                QVERIFY(!displayTitle.contains(
+                    QStringLiteral("Karaoke com letra"),
                     Qt::CaseInsensitive));
             }
         } else if (sourceId == QStringLiteral("jlo_instru")) {
