@@ -73,7 +73,7 @@ On macOS all user configuration is stored at:
 ~/Library/Application Support/240-mp-jellyfin/
   config.json          ← app and module settings
   jellyfin_auth.json   ← Jellyfin auth
-  karaoke_catalog.json ← cached public sixteen-source Karaoke catalog (refreshed after 24 hours)
+  karaoke_catalog.json ← cached public seventeen-source Karaoke catalog (refreshed after 24 hours)
   karaoke_queue.json   ← persistent Karaoke queue
   karaoke_queue.m3u8   ← generated canonical playback URLs
 ```
