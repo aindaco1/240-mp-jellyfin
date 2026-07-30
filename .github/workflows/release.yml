@@ -362,6 +362,7 @@ jobs:
             -ov -format UDZO \
             "$DMG"
           "$RCODESIGN" sign \
+            --config-file /dev/null \
             --p12-file "$RUNNER_TEMP/cert.p12" \
             --p12-password-file "$RUNNER_TEMP/cert-password" \
             --binary-identifier "com.aindaco1.240-mp-jellyfin.dmg" \
