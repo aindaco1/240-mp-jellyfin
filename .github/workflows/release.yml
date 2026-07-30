@@ -367,14 +367,16 @@ jobs:
             --p12-password-file "$RUNNER_TEMP/cert-password" \
             --binary-identifier "com.aindaco1.240-mp-jellyfin.dmg" \
             "$DMG"
-          codesign --display --verbose=4 "$DMG"
-          codesign --verify --strict --verbose=4 "$DMG"
-          certificate_prefix="$RUNNER_TEMP/dmg-signing-cert-"
-          codesign --display --extract-certificates="$certificate_prefix" "$DMG"
-          actual_team=$(openssl x509 -inform DER \
-            -in "${certificate_prefix}0" -noout -subject -nameopt sep_multiline \
-            | sed -nE 's/^[[:space:]]*OU=(.*)$/\1/p')
-          test "$actual_team" = "$EXPECTED_TEAM"
+          signature_info="$RUNNER_TEMP/dmg-signature-info.yml"
+          "$RCODESIGN" print-signature-info \
+            --config-file /dev/null \
+            "$DMG" > "$signature_info"
+          grep -Fq "identifier: com.aindaco1.240-mp-jellyfin.dmg" "$signature_info"
+          grep -Fq "apple_certificate_profile: developer-id-application" "$signature_info"
+          grep -Fq "apple_team_id: $EXPECTED_TEAM" "$signature_info"
+          grep -Fq "chains_to_apple_root_ca: true" "$signature_info"
+          grep -Fq "signature_verifies: true" "$signature_info"
+          grep -Fq "time_stamp_token:" "$signature_info"
           hdiutil verify "$DMG"
 
       - name: Notarize and staple DMG
@@ -403,7 +405,7 @@ jobs:
           rm -f \
             "$RUNNER_TEMP/cert.p12" \
             "$RUNNER_TEMP/cert-password" \
-            "$RUNNER_TEMP/dmg-signing-cert-"* \
+            "$RUNNER_TEMP/dmg-signature-info.yml" \
             "$RUNNER_TEMP/notary-key.p8"
 
       - name: Upload DMG
