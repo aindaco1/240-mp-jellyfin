@@ -241,7 +241,8 @@ jobs:
             UC4T6FfTdpvxUrf9-dd4kjpw \
             UCxuk5azVGJ-aumAds7WMHmg \
             UCg0i5aSL_2rhf4iztlLmLUQ \
-            UCM8kkIU5aIzCbyZawksZ2Bw; do
+            UCM8kkIU5aIzCbyZawksZ2Bw \
+            UCbqcG1rdt9LMwOJN4PyGTKg; do
             sample=$(env -i HOME="$HELPER_HOME" PATH=/usr/bin:/bin \
               "$BIN/yt-dlp" --no-config --no-update --no-cache-dir --no-warnings \
               --flat-playlist --lazy-playlist --playlist-end 1 \

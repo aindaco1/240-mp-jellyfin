@@ -4,6 +4,12 @@ All notable changes to 240-mp-jellyfin are documented here.
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-08-15
+
+### Added
+
+- Added KaraFun Karaoke as the eighteenth and least-preferred Karaoke catalog source, with shared title parsing that excludes non-karaoke uploads and normalizes current, alternate, and verified legacy title formats.
+
 ## [1.2.0] - 2026-07-29
 
 ### Added

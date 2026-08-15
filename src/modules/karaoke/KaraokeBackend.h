@@ -52,7 +52,7 @@ signals:
     void queueEntryPrefetchFailed(const QString &entryId, const QString &message);
 
 private:
-    static constexpr int kCatalogSchemaVersion = 11;
+    static constexpr int kCatalogSchemaVersion = 12;
     static constexpr int kQueueSchemaVersion = 1;
     static constexpr int kCatalogRefreshHours = 24;
 

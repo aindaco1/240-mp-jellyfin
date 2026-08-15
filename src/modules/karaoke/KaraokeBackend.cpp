@@ -49,6 +49,7 @@ const QString kOneMusicSourceId = QStringLiteral("one_music_karaoke");
 const QString kJanetEmailSourceId = QStringLiteral("janet_email_karaoke");
 const QString kCouchPotatoSourceId = QStringLiteral("couch_potato_karaoke");
 const QString kJustSingKaraokeSourceId = QStringLiteral("just_sing_karaoke");
+const QString kKaraFunSourceId = QStringLiteral("karafun_karaoke");
 const QList<CatalogSource> kCatalogSources{
     {
         kFunboxSourceId,
@@ -152,6 +153,12 @@ const QList<CatalogSource> kCatalogSources{
         QStringLiteral("UCM8kkIU5aIzCbyZawksZ2Bw"),
         QStringLiteral("https://www.youtube.com/channel/UCM8kkIU5aIzCbyZawksZ2Bw/videos"),
         11
+    },
+    {
+        kKaraFunSourceId,
+        QStringLiteral("UCbqcG1rdt9LMwOJN4PyGTKg"),
+        QStringLiteral("https://www.youtube.com/channel/UCbqcG1rdt9LMwOJN4PyGTKg/videos"),
+        12
     }
 };
 constexpr int kCatalogBatchSize = 64;
@@ -762,6 +769,48 @@ QString withoutJustSingKaraokeBranding(QString title)
     return title.trimmed();
 }
 
+QString karaFunCatalogTitle(const QString &rawTitle)
+{
+    // Current KaraFun uploads are song-first and pipe-delimited. Retain the
+    // alternate artist-first parenthesized form and the verified legacy
+    // song-first form in the same positive grammar so filtering and display
+    // cleanup cannot diverge.
+    static const QRegularExpression songFirstTitle(
+        QStringLiteral(
+            "^\\s*(.+)\\s+-\\s+([^|\\r\\n]+?)\\s*"
+            "\\|\\s*Karaoke\\s+Version\\s*\\|\\s*KaraFun\\s*$"),
+        QRegularExpression::CaseInsensitiveOption);
+    const QRegularExpressionMatch songFirstMatch = songFirstTitle.match(rawTitle);
+    if (songFirstMatch.hasMatch()) {
+        return songFirstMatch.captured(2).trimmed() + QStringLiteral(" - ")
+               + songFirstMatch.captured(1).trimmed();
+    }
+
+    static const QRegularExpression legacySongFirstTitle(
+        QStringLiteral(
+            "^\\s*Karaoke\\s+(.+)\\s+-\\s+(.+?)\\s*\\*\\s*$"),
+        QRegularExpression::CaseInsensitiveOption);
+    const QRegularExpressionMatch legacySongFirstMatch =
+        legacySongFirstTitle.match(rawTitle);
+    if (legacySongFirstMatch.hasMatch()) {
+        return legacySongFirstMatch.captured(2).trimmed()
+               + QStringLiteral(" - ")
+               + legacySongFirstMatch.captured(1).trimmed();
+    }
+
+    static const QRegularExpression artistFirstTitle(
+        QStringLiteral(
+            "^\\s*(.+?)\\s+-\\s+(.+?)\\s*"
+            "\\(\\s*Karaoke\\s+Version\\s*\\)"
+            "\\s*(?:\\|\\s*KaraFun\\s*)?$"),
+        QRegularExpression::CaseInsensitiveOption);
+    const QRegularExpressionMatch artistFirstMatch = artistFirstTitle.match(rawTitle);
+    if (!artistFirstMatch.hasMatch())
+        return {};
+    return artistFirstMatch.captured(1).trimmed() + QStringLiteral(" - ")
+           + artistFirstMatch.captured(2).trimmed();
+}
+
 QString sourceIdForChannelId(const QString &channelId)
 {
     for (const CatalogSource &source : kCatalogSources) {
@@ -820,6 +869,8 @@ bool isKnownSourceId(const QString &sourceId)
 
 bool isExcludedCatalogTitle(const QString &sourceId, const QString &rawTitle)
 {
+    if (sourceId == kKaraFunSourceId)
+        return karaFunCatalogTitle(rawTitle).isEmpty();
     if (sourceId != kPantsKaraokeSourceId)
         return false;
 
@@ -868,6 +919,12 @@ KaraokeBackend::~KaraokeBackend()
 QString KaraokeBackend::cleanedTitle(const QString &rawTitle,
                                      const QString &sourceId)
 {
+    if (sourceId == kKaraFunSourceId) {
+        const QString catalogTitle = karaFunCatalogTitle(rawTitle);
+        if (!catalogTitle.isEmpty())
+            return normalizedTitleSeparators(catalogTitle);
+    }
+
     static const QRegularExpression funboxSuffix(
         QStringLiteral("\\s*\\(Funbox Karaoke,\\s*([0-9]{4}(?:/[0-9]{4})*)\\)\\s*$"),
         QRegularExpression::CaseInsensitiveOption);
