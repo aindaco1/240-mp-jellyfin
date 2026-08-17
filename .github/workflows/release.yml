@@ -302,6 +302,15 @@ jobs:
     timeout-minutes: 60
 
     steps:
+      - name: Configure Git defaults
+        run: git config --global init.defaultBranch main
+
+      - name: Checkout tagged source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ env.RELEASE_TAG }}
+
       - name: Download notarized app
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         env:
@@ -357,11 +366,21 @@ jobs:
       - name: Create and sign DMG
         run: |
           DMG="240-mp-jellyfin-${{ env.RELEASE_TAG }}-macOS-arm64.dmg"
+          APP="$GITHUB_WORKSPACE/install/240-mp-jellyfin.app"
+          staging_root="$RUNNER_TEMP/dmg-staging"
+          if [[ -e "$staging_root" || -L "$staging_root" ]]; then
+            echo "refusing to replace existing DMG staging output: $staging_root" >&2
+            exit 1
+          fi
+          trap 'rm -rf "$staging_root"' EXIT
+          scripts/macos_dmg_contract.zsh stage "$APP" "$staging_root"
           hdiutil create \
             -volname "240-mp-jellyfin" \
-            -srcfolder "$GITHUB_WORKSPACE/install" \
-            -ov -format UDZO \
+            -srcfolder "$staging_root" \
+            -format UDZO \
             "$DMG"
+          rm -rf "$staging_root"
+          trap - EXIT
           "$RCODESIGN" sign \
             --config-file /dev/null \
             --p12-file "$RUNNER_TEMP/cert.p12" \
@@ -380,7 +399,7 @@ jobs:
           grep -Fq "time_stamp_token:" "$signature_info"
           hdiutil verify "$DMG"
 
-      - name: Notarize and staple DMG
+      - name: Notarize, staple, and verify DMG
         env:
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
@@ -392,8 +411,13 @@ jobs:
             --issuer "$APPLE_API_ISSUER_ID" \
             --wait
           xcrun stapler staple "$DMG"
-          xcrun stapler validate "$DMG"
-          spctl -a -t open --context context:primary-signature -vv "$DMG"
+          expected_version="${RELEASE_TAG#v}"
+          expected_version="${expected_version%%-*}"
+          expected_bundle=$(sed -nE 's/^set\(APP_BUNDLE_IDENTIFIER "([^"]+)".*/\1/p' CMakeLists.txt)
+          test -n "$expected_bundle"
+          scripts/macos_dmg_contract.zsh verify-notarized \
+            "$GITHUB_WORKSPACE/$DMG" \
+            "$expected_version" "$EXPECTED_TEAM" "$expected_bundle"
 
       - name: Create SHA-256 checksum
         run: |
@@ -466,7 +490,7 @@ jobs:
 
           ## Install
 
-          Download the Apple Silicon DMG below, open it, and move \`240-mp-jellyfin.app\` to Applications. Existing settings, Jellyfin authentication, and Karaoke data are retained when replacing an older app bundle.
+          Download the Apple Silicon DMG below, open it, and drag \`240-mp-jellyfin.app\` onto the Applications shortcut. Existing settings, Jellyfin authentication, and Karaoke data are retained when replacing an older app bundle.
           EOF
 
       - name: Publish

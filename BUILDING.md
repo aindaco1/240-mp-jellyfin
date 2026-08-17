@@ -155,7 +155,7 @@ The intended workflow is a macOS Apple Silicon build:
 | `build-macos-arm64` | `macos-26` (arm64) | Notarized app artifact |
 | `package-macos-arm64` | `macos-26` (arm64) | `240-mp-jellyfin-<tag>-macOS-arm64.dmg` |
 
-The first macOS 26 job installs Qt and packaging tools from the Apple Silicon runner's Homebrew snapshot, configures CMake for `arm64`, downloads and verifies pinned yt-dlp/Deno, builds and tests, embeds all helpers, runs `macdeployqt` without its temporary ad-hoc signing, prunes unused QML plugins, verifies every Mach-O file under a stripped environment (including one live extraction from each Karaoke source), rejects `.DS_Store`, broken symlinks, and external load paths, then Developer-ID signs, notarizes, and staples the app. The notarized app crosses jobs only as a `ditto` ZIP so signatures, entitlements, and the stapled ticket survive intact. A fresh macOS 26 job verifies that sealed app, downloads checksum-pinned `rcodesign` 0.29.0, creates and Developer-ID signs the DMG, verifies the embedded signing certificate's team against the app, validates the image checksum, notarizes and staples it, validates Gatekeeper acceptance, and publishes the DMG plus its SHA-256 checksum.
+The first macOS 26 job installs Qt and packaging tools from the Apple Silicon runner's Homebrew snapshot, configures CMake for `arm64`, downloads and verifies pinned yt-dlp/Deno, builds and tests, embeds all helpers, runs `macdeployqt` without its temporary ad-hoc signing, prunes unused QML plugins, verifies every Mach-O file under a stripped environment (including one live extraction from each Karaoke source), rejects `.DS_Store`, broken symlinks, and external load paths, then Developer-ID signs, notarizes, and staples the app. The notarized app crosses jobs only as a `ditto` ZIP so signatures, entitlements, and the stapled ticket survive intact. A fresh macOS 26 job verifies that sealed app, stages exactly the app plus an `/Applications` shortcut, validates that layout with `scripts/macos_dmg_contract.zsh`, downloads checksum-pinned `rcodesign` 0.29.0, creates and Developer-ID signs the DMG, verifies the embedded signing certificate's team against the app, validates the image checksum, notarizes and staples it, mounts it read-only to recheck the shared layout and app contract, validates Gatekeeper acceptance, and publishes the DMG plus its SHA-256 checksum.
 
 The in-app updater consumes the same release. GitHub's API asset digest is mandatory, and the downloaded bundle must pass notarization, signature-team, bundle-ID, version, and arm64 checks before installation.
 
@@ -176,7 +176,7 @@ Keep these failure modes separate:
 The recovery path deliberately separates the two operations at the failure boundary:
 
 1. Download the exact `notarized-app-arm64` artifact from the failed release run.
-2. On a trusted maintainer Mac, extract it with `ditto`, validate the app with `codesign --verify --deep --strict` and `xcrun stapler validate`, create a UDZO DMG with `hdiutil create`, and Developer-ID sign the DMG with a secure timestamp.
+2. On a trusted maintainer Mac, extract it with `ditto`, validate the app with `codesign --verify --deep --strict` and `xcrun stapler validate`, stage the app plus an exact `Applications -> /Applications` shortcut, validate that staging directory with `scripts/macos_dmg_contract.zsh validate-layout`, create a UDZO DMG with `hdiutil create`, and Developer-ID sign the DMG with a secure timestamp.
 3. Validate the candidate before it leaves the Mac:
 
    ```bash
@@ -221,6 +221,14 @@ cmake --install build --prefix /tmp/240mp-jellyfin-install-test
 /tmp/240mp-jellyfin-install-test/240-mp-jellyfin.app/Contents/Resources/bin/yt-dlp --version
 /tmp/240mp-jellyfin-install-test/240-mp-jellyfin.app/Contents/Resources/bin/deno --version
 ```
+
+Run the DMG layout fixtures independently when changing packaging or release workflows:
+
+```bash
+/bin/zsh tests/MacosDmgContractTest.zsh "$PWD/scripts/macos_dmg_contract.zsh"
+```
+
+These fixtures validate staging and layout policy only. A local unsigned image is not evidence that the release is Developer-ID signed or notarized; use a release-candidate tag to exercise the complete distribution workflow.
 
 After running `macdeployqt`, use `scripts/macos_prune_qt_deployment.zsh` to retain only QML plugins found by `qmlimportscanner`, then run `scripts/macos_verify_bundle.zsh` before signing. The release workflow is the canonical invocation for both scripts.
 
