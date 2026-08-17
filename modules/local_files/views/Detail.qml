@@ -92,13 +92,12 @@ FocusScope {
     focus: true
 
     Keys.onUpPressed: {
-        if (focusRow > 0)
-            focusRow--
+        var maxRow = maxFocusRow()
+        focusRow = (focusRow - 1 + maxRow + 1) % (maxRow + 1)
     }
     Keys.onDownPressed: {
         var maxRow = maxFocusRow()
-        if (focusRow < maxRow)
-            focusRow++
+        focusRow = (focusRow + 1) % (maxRow + 1)
     }
     Keys.onLeftPressed: {
         if (focusRow === 1 && audioStreams.length > 1)

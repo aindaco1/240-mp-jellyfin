@@ -89,7 +89,7 @@ class JellyfinBackendTest final : public QObject {
 
 private slots:
     void directPlaybackUsesPrivateHeadersAndReportsStart();
-    void transcodePlaybackRemovesTokensAndAppliesQualityLimit();
+    void transcodePlaybackPreservesTracksAndAppliesQualityLimit();
 
 private:
     static void writeAuth(const QString &root, quint16 port);
@@ -146,6 +146,7 @@ void JellyfinBackendTest::directPlaybackUsesPrivateHeadersAndReportsStart() {
     const QJsonObject playbackBody = QJsonDocument::fromJson(playbackInfo.body).object();
     QCOMPARE(playbackBody.value(QStringLiteral("EnableDirectPlay")).toBool(), true);
     QCOMPARE(playbackBody.value(QStringLiteral("AudioStreamIndex")).toInt(), 2);
+    QCOMPARE(playbackBody.value(QStringLiteral("MaxStreamingBitrate")).toInt(), 1000000000);
 
     const QJsonObject startBody = QJsonDocument::fromJson(
         server.requestWithTargetPrefix("/Sessions/Playing").body).object();
@@ -153,7 +154,7 @@ void JellyfinBackendTest::directPlaybackUsesPrivateHeadersAndReportsStart() {
     QCOMPARE(startBody.value(QStringLiteral("StartPositionTicks")).toDouble(), 1200000.0);
 }
 
-void JellyfinBackendTest::transcodePlaybackRemovesTokensAndAppliesQualityLimit() {
+void JellyfinBackendTest::transcodePlaybackPreservesTracksAndAppliesQualityLimit() {
     QTemporaryDir dataRoot;
     QVERIFY(dataRoot.isValid());
     FakeJellyfinServer server;
@@ -170,22 +171,31 @@ void JellyfinBackendTest::transcodePlaybackRemovesTokensAndAppliesQualityLimit()
 
     JellyfinBackend backend({}, dataRoot.path());
     QSignalSpy streamSpy(&backend, &JellyfinBackend::streamUrlReady);
-    backend.request_playback(QStringLiteral("item"), QStringLiteral("source"), -1, -1,
-                             true, 0);
+    backend.request_playback(QStringLiteral("item"), QStringLiteral("source"), 3, 4,
+                             true, 4500000);
     QVERIFY(streamSpy.wait(3000));
     const QUrl streamUrl(streamSpy.takeFirst().at(0).toString());
     const QUrlQuery query(streamUrl);
     QVERIFY(!streamUrl.toString().contains(QStringLiteral("api_key"), Qt::CaseInsensitive));
-    QVERIFY(!query.hasQueryItem(QStringLiteral("SubtitleStreamIndex")));
-    QVERIFY(!query.hasQueryItem(QStringLiteral("SubtitleMethod")));
+    QCOMPARE(query.queryItemValue(QStringLiteral("SubtitleStreamIndex")), QStringLiteral("4"));
+    QCOMPARE(query.queryItemValue(QStringLiteral("SubtitleMethod")), QStringLiteral("Encode"));
     QCOMPARE(query.allQueryItemValues(QStringLiteral("MaxHeight")),
              QStringList{QStringLiteral("720")});
 
     const QJsonObject playbackBody = QJsonDocument::fromJson(
         server.requestWithTargetPrefix("/Items/item/PlaybackInfo").body).object();
     QCOMPARE(playbackBody.value(QStringLiteral("EnableDirectPlay")).toBool(), false);
+    QCOMPARE(playbackBody.value(QStringLiteral("AudioStreamIndex")).toInt(), 3);
+    QCOMPARE(playbackBody.value(QStringLiteral("SubtitleStreamIndex")).toInt(), 4);
     QCOMPARE(playbackBody.value(QStringLiteral("MaxHeight")).toInt(), 720);
     QCOMPARE(playbackBody.value(QStringLiteral("MaxStreamingBitrate")).toInt(), 8000000);
+
+    QTRY_VERIFY_WITH_TIMEOUT(server.sawTargetPrefix("/Sessions/Playing"), 3000);
+    const QJsonObject startBody = QJsonDocument::fromJson(
+        server.requestWithTargetPrefix("/Sessions/Playing").body).object();
+    QCOMPARE(startBody.value(QStringLiteral("AudioStreamIndex")).toInt(), 3);
+    QCOMPARE(startBody.value(QStringLiteral("SubtitleStreamIndex")).toInt(), 4);
+    QCOMPARE(startBody.value(QStringLiteral("StartPositionTicks")).toDouble(), 4500000.0);
 }
 
 QTEST_GUILESS_MAIN(JellyfinBackendTest)

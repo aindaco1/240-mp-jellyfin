@@ -71,6 +71,17 @@ FocusScope {
         clip: true;
         focus: true;
 
+        Keys.onUpPressed: {
+            if (count === 0) return
+            currentIndex = (currentIndex - 1 + count) % count
+            menuList.positionViewAtIndex(currentIndex, ListView.Contain)
+        }
+        Keys.onDownPressed: {
+            if (count === 0) return
+            currentIndex = (currentIndex + 1) % count
+            menuList.positionViewAtIndex(currentIndex, ListView.Contain)
+        }
+
         delegate: Item {
             width: menuList.width;
             height: root.sh * 0.0583333 //28

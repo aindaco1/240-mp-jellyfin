@@ -80,10 +80,14 @@ FocusScope {
         focus: true
 
         Keys.onUpPressed: {
-            if (currentIndex > 0) currentIndex--
+            if (count === 0) return
+            currentIndex = (currentIndex - 1 + count) % count
+            dirList.positionViewAtIndex(currentIndex, ListView.Contain)
         }
         Keys.onDownPressed: {
-            if (currentIndex < count - 1) currentIndex++
+            if (count === 0) return
+            currentIndex = (currentIndex + 1) % count
+            dirList.positionViewAtIndex(currentIndex, ListView.Contain)
         }
         Keys.onReturnPressed: {
             var entry = browserRoot.listModel[currentIndex]

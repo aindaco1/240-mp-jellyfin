@@ -2,6 +2,12 @@
 
 Version 1.1 completed the fork's daily-use Apple Silicon macOS foundation. Future work stays focused on reliability and depth in the existing modules rather than expanding platform or module scope.
 
+## Shipped In 1.4.0-rc1
+
+- Independent controller/media display selection while preserving the automatic two-display handoff.
+- Jellyfin audio/subtitle changes during transcoding, high-bitrate direct-play negotiation, and clearer episode list labels.
+- Settings IP visibility, wraparound list navigation, held-key seeking, and CJK/Hangul glyph fallback.
+
 ## Shipped In 1.1
 
 - Full Jellyfin TV flow: Continue Watching, Up Next, collections/folders, playback negotiation, quality limits, direct-to-transcode fallback, server progress, next-episode autoplay, remembered languages, and capability-gated intro/outro skipping.

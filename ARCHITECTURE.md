@@ -157,6 +157,8 @@ A real example from Plex — note `requires_auth`, dynamic options, and apply sl
 | `invoke_module_action(moduleId, slotName)` | Routes to the registered backend via `QMetaObject::invokeMethod` |
 | `get_module_auth_state(moduleId)` | Returns the module's auth state (for `requires_auth` settings) |
 | `getCustomColorScheme()` | Returns the user's custom color scheme |
+| `displayOptions()` | Returns attached display indices, names, and current resolutions |
+| `localIpAddress()` | Returns the preferred routable local IPv4 address for Settings |
 | `listDirectories(path)` / `parentDirectory(path)` / `homePath()` | Helpers for `directory_browser` |
 
 ### Signals
@@ -189,7 +191,7 @@ The current mpv implementation is a good reference implementation of the "browse
 
 ### How the hand-off works
 
-1. **Launch** — `loadAndPlayWithOptions(url, options)` starts mpv as a `QProcess`; the legacy positional wrapper delegates to it. Named options cover resume, playlists, looping/shuffle, audio/subtitle selection, sidecars, images, filters, input bindings, and authenticated headers without duplicating launch logic across modules. On macOS, if another display is connected, mpv is launched fullscreen on the first non-main screen by default. `Main.qml` also owns a second-screen QML output layer for pure-QML media and mpv-adjacent overlays, while the primary window stays available as a playback control surface. `HelperResolver` resolves packaged helpers first, then development overrides and `PATH`, and builds a per-process `PATH`; the app never mutates its global environment or links libmpv.
+1. **Launch** — `loadAndPlayWithOptions(url, options)` starts mpv as a `QProcess`; the legacy positional wrapper delegates to it. Named options cover resume, playlists, looping/shuffle, audio/subtitle selection, sidecars, images, filters, input bindings, authenticated headers, and module-owned extra mpv arguments without duplicating launch logic across modules. `resolveDisplaySelection` assigns separate controller and media roles from the saved app settings: automatic keeps the controller on the primary display and chooses the first other display for media, while explicit indices can target either role or make media share the controller display. `Main.qml` owns the matching second-screen QML output layer for pure-QML media and mpv-adjacent overlays. `HelperResolver` resolves packaged helpers first, then development overrides and `PATH`, and builds a per-process `PATH`; the app never mutates its global environment or links libmpv.
 2. **Authenticated HTTP playback** — Jellyfin headers are written to a temporary owner-only mpv include file and passed with `--include=<file>`, so tokens are not exposed as normal command-line header arguments. Jellyfin stream URLs avoid `api_key` query tokens.
 3. **Control channel** — mpv is started with `--input-ipc-server=<socket>` (a Unix domain socket at `/tmp/240-mp-jellyfin-mpv.sock`). `MpvController` connects to it with a `QLocalSocket` and sends JSON commands via `sendCommand(QJsonArray)`. Seeking, key input, video filters, messages, and playlist append/remove/move/clear/play/replace operations go over this channel. mpv client messages using the `240mp-key` prefix are bridged back to QML through `mpvKeyPressed`; `file-loaded` is surfaced separately so overlays can reveal only after the replacement video is ready.
 4. **State back to QML** — `MpvController` issues `observe_property` for `time-pos`, `duration`, and `playlist-pos`, and re-publishes them as `Q_PROPERTY`s + the `positionChanged` / `durationChanged` / `playlistPosChanged` signals. A watchdog timer logs a warning if no `time-pos` event arrives for about 30 s.
@@ -234,6 +236,7 @@ The Jellyfin module lives in `modules/jellyfin/` and `src/modules/jellyfin/`.
 - Completed lists are cached per parent/type for the current app session and cleared on logout or new authentication.
 - Detail loading fetches heavier fields, including `Overview` and `MediaSources`, only when a playable movie or episode is opened.
 - Playback calls `/Items/{itemId}/PlaybackInfo`, prefers direct/static playback when selected, supports constrained HLS transcoding, and retries a failed direct launch once through the transcode path.
+- During HLS transcoding, audio or burned-in subtitle changes close the old Jellyfin session and request a new transcode at the current playback position; mpv client messages bridge the OSD action back to `Player.qml`.
 - Start/progress/stop state is reported to Jellyfin, and TV playback can automatically request the next aired episode.
 - Audio/subtitle language preferences persist in the private auth-state file; intro/outro skip settings appear only after the server's Media Segments endpoint is probed successfully.
 
@@ -476,6 +479,8 @@ User configuration is stored in `config.json` in the app's data directory:
 {
   "app": {
     "color_scheme": "Video 1",
+    "controller_display_index": -1,
+    "media_display_index": -1,
     "prevent_sleep": "ON",
     "battery_sleep_threshold": "10%"
   },
@@ -493,4 +498,4 @@ User configuration is stored in `config.json` in the app's data directory:
 }
 ```
 
-Each module's settings live under `modules.<id>`. App-wide settings live under `app`; `prevent_sleep` controls the macOS idle sleep assertion, and `battery_sleep_threshold` releases that assertion while the internal battery is discharging at or below the configured percentage so macOS can sleep normally. Use `save_setting` / `get_setting` (which support dot-notation keys) rather than writing the file directly. The data directory is created on first run and is separate from the app itself, so rebuilding never wipes user settings. For the exact macOS path, see [BUILDING.md](BUILDING.md#configuration).
+Each module's settings live under `modules.<id>`. App-wide settings live under `app`; display index `-1` means automatic, and `media_display_index: -2` means use the controller display. `prevent_sleep` controls the macOS idle sleep assertion, and `battery_sleep_threshold` releases that assertion while the internal battery is discharging at or below the configured percentage so macOS can sleep normally. Use `save_setting` / `get_setting` (which support dot-notation keys) rather than writing the file directly. The data directory is created on first run and is separate from the app itself, so rebuilding never wipes user settings. For the exact macOS path, see [BUILDING.md](BUILDING.md#configuration).

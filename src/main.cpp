@@ -13,6 +13,7 @@
 #include <locale.h>
 
 #include "AppCore.h"
+#include "display/DisplaySelection.h"
 #include "modules/local_files/LocalFilesBackend.h"
 #include "modules/plex/PlexBackend.h"
 #include "modules/jellyfin/JellyfinBackend.h"
@@ -56,16 +57,6 @@ static QString resolveDataRoot() {
     return path;
 }
 
-static QScreen *resolveExternalMediaScreen() {
-    const QList<QScreen *> screens = QGuiApplication::screens();
-    QScreen *primary = QGuiApplication::primaryScreen();
-    for (QScreen *screen : screens) {
-        if (screen && screen != primary)
-            return screen;
-    }
-    return nullptr;
-}
-
 static bool preventSleepEnabledFromSettings(AppCore &appCore) {
     const QString value = appCore.get_setting("", "prevent_sleep").toString().trimmed();
     return value.isEmpty() || value.compare(QStringLiteral("ON"), Qt::CaseInsensitive) == 0;
@@ -101,9 +92,6 @@ int main(int argc, char *argv[]) {
 #ifdef Q_OS_MAC
     QGuiApplication::setOverrideCursor(Qt::BlankCursor);
     hideMacOSMenuBar();
-    int macW = macMainScreenWidth();
-    int macH = macMainScreenHeight();
-    qDebug("[main] macOS NSScreen main frame: %dx%d", macW, macH);
 #endif
 
     setlocale(LC_NUMERIC, "C");
@@ -116,6 +104,31 @@ int main(int argc, char *argv[]) {
     QQmlApplicationEngine engine;
 
     AppCore             appCore(appRoot, dataRoot);
+    const QList<QScreen *> screens = QGuiApplication::screens();
+    for (int index = 0; index < screens.size(); ++index) {
+        const QRect geometry = screens.at(index)->geometry();
+        qInfo("[main] display index %d: \"%s\" %dx%d at (%d,%d)",
+              index, qPrintable(screens.at(index)->name()),
+              geometry.width(), geometry.height(), geometry.x(), geometry.y());
+    }
+
+    const QVariant controllerValue = appCore.get_setting({}, QStringLiteral("controller_display_index"));
+    const QVariant mediaValue = appCore.get_setting({}, QStringLiteral("media_display_index"));
+    const int controllerSetting = controllerValue.isValid() && !controllerValue.isNull()
+        ? controllerValue.toInt() : -1;
+    const int mediaSetting = mediaValue.isValid() && !mediaValue.isNull()
+        ? mediaValue.toInt() : -1;
+    const int primaryIndex = screens.indexOf(QGuiApplication::primaryScreen());
+    const DisplaySelection displaySelection = resolveDisplaySelection(
+        screens.size(), primaryIndex, controllerSetting, mediaSetting);
+    QScreen *controllerScreen = screens.value(displaySelection.controllerIndex,
+                                               QGuiApplication::primaryScreen());
+    QScreen *mediaScreen = screens.value(displaySelection.mediaIndex, controllerScreen);
+    const QRect controllerGeometry = controllerScreen
+        ? controllerScreen->geometry() : QRect(0, 0, 1920, 1080);
+    const QRect mediaGeometry = mediaScreen ? mediaScreen->geometry() : controllerGeometry;
+    qInfo("[main] display roles: controller=%d media=%d",
+          displaySelection.controllerIndex, displaySelection.mediaIndex);
     LocalFilesBackend   localFiles(appRoot, dataRoot);
     PlexBackend         plexBackend(appRoot, dataRoot);
     JellyfinBackend     jellyfinBackend(appRoot, dataRoot);
@@ -123,6 +136,7 @@ int main(int argc, char *argv[]) {
     AmbientModeBackend  ambientMode(appRoot, dataRoot);
     TumblrScreensaverBackend tumblrScreensaver;
     MpvController       mpvController(appRoot, &appCore);
+    mpvController.setPlaybackScreenIndex(displaySelection.mediaIndex);
     IdleTracker         idleTracker;
     InputManager        inputManager;
     UpdateManager       updateManager(dataRoot);
@@ -163,18 +177,16 @@ int main(int argc, char *argv[]) {
     ctx->setContextProperty("idleTracker",   &idleTracker);
     ctx->setContextProperty("inputManager",  &inputManager);
     ctx->setContextProperty("updateManager", &updateManager);
-    QScreen *externalMediaScreen = resolveExternalMediaScreen();
-    QRect externalMediaGeometry = externalMediaScreen ? externalMediaScreen->geometry() : QRect(0, 0, macW, macH);
-    ctx->setContextProperty("hasExternalMediaScreen", externalMediaScreen != nullptr);
-    ctx->setContextProperty("externalMediaScreenX", externalMediaGeometry.x());
-    ctx->setContextProperty("externalMediaScreenY", externalMediaGeometry.y());
-    ctx->setContextProperty("externalMediaScreenWidth", externalMediaGeometry.width());
-    ctx->setContextProperty("externalMediaScreenHeight", externalMediaGeometry.height());
+    ctx->setContextProperty("hasExternalMediaScreen", displaySelection.hasSeparateMediaScreen());
+    ctx->setContextProperty("externalMediaScreenX", mediaGeometry.x());
+    ctx->setContextProperty("externalMediaScreenY", mediaGeometry.y());
+    ctx->setContextProperty("externalMediaScreenWidth", mediaGeometry.width());
+    ctx->setContextProperty("externalMediaScreenHeight", mediaGeometry.height());
 #ifdef Q_OS_MAC
-    engine.rootContext()->setContextProperty("macScreenX",      QVariant::fromValue(0));
-    engine.rootContext()->setContextProperty("macScreenY",      QVariant::fromValue(0));
-    engine.rootContext()->setContextProperty("macScreenWidth",  macW);
-    engine.rootContext()->setContextProperty("macScreenHeight", macH);
+    engine.rootContext()->setContextProperty("macScreenX",      QVariant(controllerGeometry.x()));
+    engine.rootContext()->setContextProperty("macScreenY",      QVariant(controllerGeometry.y()));
+    engine.rootContext()->setContextProperty("macScreenWidth",  QVariant(controllerGeometry.width()));
+    engine.rootContext()->setContextProperty("macScreenHeight", QVariant(controllerGeometry.height()));
 #endif
 
     engine.addImportPath(appRoot + "/views");
@@ -189,8 +201,12 @@ int main(int argc, char *argv[]) {
 
 #ifdef Q_OS_MAC
     if (QWindow *win = qobject_cast<QWindow *>(engine.rootObjects().first())) {
+        if (controllerScreen)
+            win->setScreen(controllerScreen);
+        win->setGeometry(controllerGeometry);
         win->winId(); // ensure native NSWindow is created
-        forceWindowFullScreen(reinterpret_cast<void *>(win->winId()));
+        forceWindowFullScreenOnScreen(reinterpret_cast<void *>(win->winId()),
+                                      displaySelection.controllerIndex);
     }
 #endif
 

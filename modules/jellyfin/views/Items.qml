@@ -71,12 +71,16 @@ FocusScope {
 
     function handleKey(event) {
         if (event.key === Qt.Key_Up) {
-            if (itemList.currentIndex > 0) itemList.currentIndex--
+            if (itemList.count > 0)
+                itemList.currentIndex = (itemList.currentIndex - 1 + itemList.count) % itemList.count
+            itemList.positionViewAtIndex(itemList.currentIndex, ListView.Contain)
             event.accepted = true
             return
         }
         if (event.key === Qt.Key_Down) {
-            if (itemList.currentIndex < itemList.count - 1) itemList.currentIndex++
+            if (itemList.count > 0)
+                itemList.currentIndex = (itemList.currentIndex + 1) % itemList.count
+            itemList.positionViewAtIndex(itemList.currentIndex, ListView.Contain)
             event.accepted = true
             return
         }
@@ -396,7 +400,7 @@ FocusScope {
         delegate: SelectableMarqueeRow {
             width: itemList.width
             height: root.sh * 0.0583333
-            label: modelData.title || ""
+            label: JellyfinMedia.listTitle(modelData, mode === "continue" || mode === "upnext")
             selected: itemList.currentIndex === index
         }
     }

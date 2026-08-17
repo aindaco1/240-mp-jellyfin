@@ -9,6 +9,10 @@
 #include <QRegularExpression>
 #include <QQmlContext>
 #include <QJSValue>
+#include <QGuiApplication>
+#include <QScreen>
+#include <QNetworkInterface>
+#include <QHostAddress>
 #include <algorithm>
 
 AppCore::AppCore(const QString &appRoot, const QString &dataRoot, QObject *parent)
@@ -144,6 +148,63 @@ QVariant AppCore::get_setting(const QString &moduleId, const QString &key) {
     if (parts.size() == 2)
         return target.value(parts[0]).toObject().value(parts[1]).toVariant();
     return target.value(key).toVariant();
+}
+
+QVariantList AppCore::displayOptions() const {
+    QVariantList options;
+    const QList<QScreen *> screens = QGuiApplication::screens();
+    for (int index = 0; index < screens.size(); ++index) {
+        const QScreen *screen = screens.at(index);
+        const QSize size = screen->geometry().size();
+        options.append(QVariantMap{
+            {QStringLiteral("id"), index},
+            {QStringLiteral("label"), QStringLiteral("%1: %2 (%3x%4)")
+                 .arg(index)
+                 .arg(screen->name().isEmpty() ? QStringLiteral("Display") : screen->name())
+                 .arg(size.width())
+                 .arg(size.height())}
+        });
+    }
+    return options;
+}
+
+QString AppCore::localIpAddress() const {
+    static const QRegularExpression virtualInterface(
+        QStringLiteral("^(docker|br-|bridge|veth|virbr|vmnet|vboxnet|utun|tun|tap|ipsec|zt|awdl|llw|anpi|ap\\d)"),
+        QRegularExpression::CaseInsensitiveOption);
+
+    QString best;
+    int bestScore = -1;
+    for (const QNetworkInterface &interface : QNetworkInterface::allInterfaces()) {
+        const QNetworkInterface::InterfaceFlags flags = interface.flags();
+        if (!flags.testFlag(QNetworkInterface::IsUp) ||
+            !flags.testFlag(QNetworkInterface::IsRunning) ||
+            flags.testFlag(QNetworkInterface::IsLoopBack) ||
+            interface.type() == QNetworkInterface::Virtual ||
+            virtualInterface.match(interface.name()).hasMatch()) {
+            continue;
+        }
+
+        int score = 0;
+        if (interface.type() == QNetworkInterface::Ethernet)
+            score = 2;
+        else if (interface.type() == QNetworkInterface::Wifi)
+            score = 1;
+        if (score <= bestScore)
+            continue;
+
+        for (const QNetworkAddressEntry &entry : interface.addressEntries()) {
+            const QHostAddress address = entry.ip();
+            if (address.protocol() != QAbstractSocket::IPv4Protocol ||
+                address.isLoopback() || address.isLinkLocal()) {
+                continue;
+            }
+            best = address.toString();
+            bestScore = score;
+            break;
+        }
+    }
+    return best;
 }
 
 void AppCore::save_setting(const QString &moduleId, const QString &key, const QVariant &value) {

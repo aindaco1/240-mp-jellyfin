@@ -274,6 +274,7 @@ void MpvController::loadAndPlayWithOptions(const QString &url, const QVariantMap
     const QStringList httpHeaderFields = options.value("httpHeaderFields").toStringList();
     const QString videoFilters = options.value("videoFilters").toString();
     const QStringList inputBindings = options.value("inputBindings").toStringList();
+    const QStringList extraArguments = options.value("extraArguments").toStringList();
     const int imageDurationSeconds = qMax(0, options.value("imageDurationSeconds").toInt());
     if (m_process) {
         m_process->disconnect();
@@ -399,6 +400,7 @@ void MpvController::loadAndPlayWithOptions(const QString &url, const QVariantMap
     }
     if (imageDurationSeconds > 0)
         args << QString("--image-display-duration=%1").arg(imageDurationSeconds);
+    args << extraArguments;
 
     const bool usesYoutube = oscMode == QStringLiteral("karaoke")
                           || oscMode == QStringLiteral("retro");
@@ -525,10 +527,9 @@ void MpvController::loadAndPlayWithOptions(const QString &url, const QVariantMap
              << "--hwdec=videotoolbox"
              << QString("--osd-fonts-dir=%1").arg(m_appRoot + "/assets/fonts");
 #ifdef Q_OS_MACOS
-        const int externalScreenIndex = macExternalPlaybackScreenIndex();
-        if (externalScreenIndex >= 0) {
-            args << QString("--screen=%1").arg(externalScreenIndex)
-                 << QString("--fs-screen=%1").arg(externalScreenIndex);
+        if (m_playbackScreenIndex >= 0) {
+            args << QString("--screen=%1").arg(m_playbackScreenIndex)
+                 << QString("--fs-screen=%1").arg(m_playbackScreenIndex);
         }
 #endif
         qDebug("[MpvController] desktop launch: mpv %s", qPrintable(redactedArgsForLog(args).join(" ")));
@@ -640,6 +641,10 @@ void MpvController::onIpcReadyRead() {
                 emit skipRequested();
             else if (args.size() >= 2 && args.at(0).toString() == QStringLiteral("240mp-key"))
                 emit mpvKeyPressed(args.at(1).toString());
+            else if (!args.isEmpty() && args.at(0).toString() == QStringLiteral("cycle-sub"))
+                emit subtitleCycleRequested();
+            else if (!args.isEmpty() && args.at(0).toString() == QStringLiteral("cycle-audio"))
+                emit audioCycleRequested();
             continue;
         }
 

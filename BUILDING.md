@@ -142,7 +142,7 @@ git push origin v1.1.0-rc1
 ```
 
 Tags containing `-rc`, `-beta`, or `-alpha` are published as GitHub pre-releases.
-The numeric portion of the tag must match the version declared in `CMakeLists.txt`; CI rejects mismatched tags before building. Public release notes are generated from that version's section in [CHANGELOG.md](CHANGELOG.md), so finalize the dated changelog entry before tagging.
+The numeric portion of the tag must match the `project(...)` version in `CMakeLists.txt`, and the full tag must match `APP_RELEASE_TAG`; CI rejects either mismatch before building. Public release notes are generated from the full tag's section in [CHANGELOG.md](CHANGELOG.md), so bump both declarations and finalize the matching dated changelog entry before tagging.
 
 If a tag push does not produce an Actions run, use **Actions → Release → Run workflow** and enter the existing tag. The manual path checks out that tag and runs the same version validation, tests, signing, notarization, and publication steps; it does not build arbitrary untagged source.
 
