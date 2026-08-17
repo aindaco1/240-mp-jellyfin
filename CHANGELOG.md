@@ -21,6 +21,7 @@ All notable changes to 240-mp-jellyfin are documented here.
 
 - Selectively incorporated the relevant macOS, navigation, and Jellyfin improvements from upstream [240-MP v2026.08.17](https://github.com/anthonycaccese/240-MP/releases/tag/v2026.08.17). The upstream Scripts module, Plex PIN profiles, non-macOS platform work, and unrelated new modules remain out of scope for this fork.
 - Release metadata now declares the exact prerelease tag separately from the numeric bundle version, and CI rejects a tag that disagrees with either value.
+- Added an Apple Silicon pull-request CI gate for release builds, the complete CTest suite, QML lint, and an mpv OSD smoke test before changes reach the tag-triggered signing workflow.
 
 ## [1.3.1] - 2026-08-17
 
