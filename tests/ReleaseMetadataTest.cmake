@@ -4,21 +4,25 @@ endif()
 if(NOT DEFINED RELEASE_VERSION OR RELEASE_VERSION STREQUAL "")
     message(FATAL_ERROR "RELEASE_VERSION is required")
 endif()
+if(NOT DEFINED RELEASE_TAG OR RELEASE_TAG STREQUAL "")
+    message(FATAL_ERROR "RELEASE_TAG is required")
+endif()
 
 file(READ "${SOURCE_ROOT}/README.md" readme)
 file(READ "${SOURCE_ROOT}/CHANGELOG.md" changelog)
 file(READ "${SOURCE_ROOT}/INSTALL.md" install_guide)
 
 set(expected_download_url
-    "https://github.com/aindaco1/240-mp-jellyfin/releases/download/v${RELEASE_VERSION}/240-mp-jellyfin-v${RELEASE_VERSION}-macOS-arm64.dmg")
+    "https://github.com/aindaco1/240-mp-jellyfin/releases/download/${RELEASE_TAG}/240-mp-jellyfin-${RELEASE_TAG}-macOS-arm64.dmg")
 string(FIND "${readme}" "${expected_download_url}" download_url_index)
 if(download_url_index EQUAL -1)
     message(FATAL_ERROR "README direct DMG URL does not match ${RELEASE_VERSION}")
 endif()
 
-string(FIND "${changelog}" "## [${RELEASE_VERSION}] - " changelog_version_index)
+string(REGEX REPLACE "^v" "" changelog_release "${RELEASE_TAG}")
+string(FIND "${changelog}" "## [${changelog_release}] - " changelog_version_index)
 if(changelog_version_index EQUAL -1)
-    message(FATAL_ERROR "CHANGELOG has no dated ${RELEASE_VERSION} section")
+    message(FATAL_ERROR "CHANGELOG has no dated ${changelog_release} section")
 endif()
 
 string(FIND "${install_guide}" "onto the Applications shortcut" install_instruction_index)

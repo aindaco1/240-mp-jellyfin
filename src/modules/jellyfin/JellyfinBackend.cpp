@@ -81,7 +81,7 @@ int JellyfinBackend::videoQualityBitrate() const {
     if (quality == "576p") return 5000000;
     if (quality == "720p") return 8000000;
     if (quality == "1080p") return 16000000;
-    return 0;
+    return 1000000000;
 }
 
 int JellyfinBackend::videoQualityMaxHeight() const {

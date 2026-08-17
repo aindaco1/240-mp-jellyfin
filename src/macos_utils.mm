@@ -130,16 +130,6 @@ void hideMacOSMenuBar() {
         NSApplicationPresentationHideDock];
 }
 
-int macMainScreenWidth() {
-    NSScreen *s = [NSScreen mainScreen];
-    return s ? (int)s.frame.size.width : 1920;
-}
-
-int macMainScreenHeight() {
-    NSScreen *s = [NSScreen mainScreen];
-    return s ? (int)s.frame.size.height : 1080;
-}
-
 void configureMacSleepPrevention(bool enabled, int lowBatteryThresholdPercent) {
     sleepPreventionEnabled = enabled;
     sleepPreventionLowBatteryThreshold = lowBatteryThresholdPercent;
@@ -156,51 +146,23 @@ void stopMacSleepPrevention() {
     }
 }
 
-static BOOL sameScreen(NSScreen *a, NSScreen *b) {
-    if (a == b)
-        return YES;
-    if (!a || !b)
-        return NO;
-
-    NSNumber *aNumber = a.deviceDescription[@"NSScreenNumber"];
-    NSNumber *bNumber = b.deviceDescription[@"NSScreenNumber"];
-    return aNumber && bNumber && [aNumber isEqualToNumber:bNumber];
-}
-
-int macExternalPlaybackScreenIndex() {
-    NSArray<NSScreen *> *screens = [NSScreen screens];
-    if (screens.count < 2)
-        return -1;
-
-    NSScreen *main = [NSScreen mainScreen];
-    for (NSUInteger i = 0; i < screens.count; ++i) {
-        NSScreen *screen = screens[i];
-        if (!sameScreen(screen, main)) {
-            NSLog(@"[240-MP] external playback screen: index=%lu name=%@ frame={{%.0f,%.0f},{%.0f,%.0f}}",
-                  (unsigned long)i,
-                  screen.localizedName,
-                  screen.frame.origin.x, screen.frame.origin.y,
-                  screen.frame.size.width, screen.frame.size.height);
-            return (int)i;
-        }
-    }
-
-    return -1;
-}
-
-// Forces the Qt window's NSWindow to exactly cover its screen.
+// Forces the Qt window's NSWindow to exactly cover a chosen screen.
 // Called after the QML engine loads so the native NSWindow exists.
-// Using win.screen.frame ensures we use the screen the window is on,
-// bypassing any Qt geometry constraints or dock/menubar reservations.
-void forceWindowFullScreen(void *handle) {
+void forceWindowFullScreenOnScreen(void *handle, int screenIndex) {
     NSView   *view   = (__bridge NSView *)(void *)handle;
     NSWindow *win    = [view window];
     if (!win) { NSLog(@"[240-MP] forceWindowFullScreen: no NSWindow"); return; }
 
-    NSScreen *screen = win.screen ?: [NSScreen mainScreen];
+    NSArray<NSScreen *> *screens = [NSScreen screens];
+    NSScreen *screen = nil;
+    if (screenIndex >= 0 && screenIndex < (int)screens.count)
+        screen = screens[screenIndex];
+    if (!screen)
+        screen = win.screen ?: [NSScreen mainScreen];
     if (!screen) { NSLog(@"[240-MP] forceWindowFullScreen: no NSScreen"); return; }
 
-    NSLog(@"[240-MP] forceWindowFullScreen: screen.frame = {{%.0f,%.0f},{%.0f,%.0f}}",
+    NSLog(@"[240-MP] forceWindowFullScreen: index=%d screen.frame = {{%.0f,%.0f},{%.0f,%.0f}}",
+          screenIndex,
           screen.frame.origin.x, screen.frame.origin.y,
           screen.frame.size.width, screen.frame.size.height);
 

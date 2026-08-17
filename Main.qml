@@ -163,6 +163,11 @@ Window {
     FontLoader { 
         id: font; source: "assets/fonts/VCR_OSD_MONO_1.001.ttf" 
     }
+    // Register a retro-styled fallback for glyphs VCR OSD Mono does not cover,
+    // including CJK and Hangul. Qt's normal missing-glyph fallback selects it.
+    FontLoader {
+        id: unifontLoader; source: "assets/fonts/unifont.otf"
+    }
     property string globalFont: font.name;
 
     // --- APP-LEVEL NAV STACK ---

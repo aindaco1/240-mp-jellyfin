@@ -26,6 +26,7 @@ The home screen order is Jellyfin, Karaoke, Retro, Tumblr, Local, then Loop.
 - Continue Watching and Up Next rows.
 - Collection and ordinary folder browsing, with collection items sorted by release date.
 - Jellyfin PlaybackInfo negotiation with direct play, direct stream, configurable 480p–1080p transcoding, and automatic transcode retry when direct playback fails.
+- Audio and subtitle changes remain available during transcoding by restarting the server transcode at the current position with the newly selected track.
 - Playback start, progress, stop, and completion reporting back to Jellyfin.
 - Optional next-episode autoplay and server-capability-gated intro/outro skip modes.
 - Resume prompt based on Jellyfin playback position.
@@ -106,7 +107,7 @@ APP_ROOT=$(pwd) ./build/240-mp-jellyfin.app/Contents/MacOS/240-mp-jellyfin
 
 ## Install
 
-See [INSTALL.md](INSTALL.md). [Download 240-mp-jellyfin 1.3.1 for Apple Silicon](https://github.com/aindaco1/240-mp-jellyfin/releases/download/v1.3.1/240-mp-jellyfin-v1.3.1-macOS-arm64.dmg), open the notarized DMG, and drag the app onto its Applications shortcut. If EasyDMG is already configured as the Mac's default DMG handler, the same single-app image can automate that copy; no additional installer is required. Checksums and release notes remain available from [GitHub Releases](https://github.com/aindaco1/240-mp-jellyfin/releases/latest).
+See [INSTALL.md](INSTALL.md). [Download the 240-mp-jellyfin 1.4.0 release candidate for Apple Silicon](https://github.com/aindaco1/240-mp-jellyfin/releases/download/v1.4.0-rc1/240-mp-jellyfin-v1.4.0-rc1-macOS-arm64.dmg), open the notarized DMG, and drag the app onto its Applications shortcut. If EasyDMG is already configured as the Mac's default DMG handler, the same single-app image can automate that copy; no additional installer is required. Checksums and release notes remain available from [GitHub Releases](https://github.com/aindaco1/240-mp-jellyfin/releases).
 
 Signed releases can check, download, verify, and install later versions from **Settings → Software Update**. The updater verifies GitHub's SHA-256 digest, Apple notarization, the Developer ID team, bundle identity, version, and Apple Silicon architecture before replacing the app.
 
@@ -142,5 +143,7 @@ User configuration is stored outside the app bundle:
 ## License
 
 This project remains licensed under the GNU General Public License v3.0. See [LICENSE](LICENSE) for the full text.
+
+The bundled VCR OSD Mono font is by Riciery Santos Leal (mrmanet); its license is in [assets/fonts/LICENSE-vcr-osd-mono.txt](assets/fonts/LICENSE-vcr-osd-mono.txt). GNU Unifont provides fallback glyphs for CJK, Hangul, and other scripts under the SIL Open Font License v1.1; see [assets/fonts/LICENSE-unifont.txt](assets/fonts/LICENSE-unifont.txt).
 
 If you distribute a modified version, you must also distribute it under GPL-3.0 and make the source available.

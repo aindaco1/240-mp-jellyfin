@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(240mp VERSION 1.3.1 LANGUAGES CXX)
+project(240mp VERSION 1.4.0 LANGUAGES CXX)
 
 if(NOT APPLE)
     message(FATAL_ERROR "This fork is macOS-only. Configure and build it on macOS.")
@@ -13,6 +13,7 @@ set(CMAKE_AUTOMOC ON)
 # is reached through a symlink such as macOS's /tmp -> /private/tmp.
 set(CMAKE_AUTOMOC_PATH_PREFIX ON)
 set(APP_DISPLAY_NAME "240-mp-jellyfin")
+set(APP_RELEASE_TAG "v1.4.0-rc1")
 set(APP_BUNDLE_IDENTIFIER "com.240mp.jellyfin" CACHE STRING "macOS bundle identifier")
 set(APP_UPDATE_REPOSITORY "aindaco1/240-mp-jellyfin" CACHE STRING "GitHub update repository")
 set(APP_UPDATE_TEAM_ID "PWT3Q52LZ2" CACHE STRING "Expected Developer ID team for updates")
@@ -53,6 +54,7 @@ enable_language(OBJCXX)
 add_executable(240mp
     src/main.cpp
     src/AppCore.cpp
+    src/display/DisplaySelection.cpp
     src/modules/local_files/LocalFilesBackend.cpp
     src/modules/plex/PlexBackend.cpp
     src/modules/jellyfin/JellyfinBackend.cpp
@@ -107,8 +109,16 @@ if(BUILD_TESTING)
         src/AppCore.cpp
     )
     target_include_directories(app_core_tests PRIVATE src)
-    target_link_libraries(app_core_tests PRIVATE Qt6::Core Qt6::Qml Qt6::Test)
+    target_link_libraries(app_core_tests PRIVATE Qt6::Core Qt6::Gui Qt6::Qml Qt6::Network Qt6::Test)
     add_test(NAME app_core COMMAND app_core_tests)
+
+    add_executable(display_selection_tests
+        tests/DisplaySelectionTest.cpp
+        src/display/DisplaySelection.cpp
+    )
+    target_include_directories(display_selection_tests PRIVATE src)
+    target_link_libraries(display_selection_tests PRIVATE Qt6::Core Qt6::Test)
+    add_test(NAME display_selection COMMAND display_selection_tests)
 
     add_executable(karaoke_backend_tests
         tests/KaraokeBackendTest.cpp
@@ -167,6 +177,15 @@ if(BUILD_TESTING)
     target_link_libraries(jellyfin_backend_tests PRIVATE Qt6::Core Qt6::Network Qt6::Test)
     add_test(NAME jellyfin_backend COMMAND jellyfin_backend_tests)
 
+    add_executable(jellyfin_media_tests
+        tests/JellyfinMediaTest.cpp
+    )
+    target_compile_definitions(jellyfin_media_tests PRIVATE
+        TEST_SOURCE_ROOT="${CMAKE_SOURCE_DIR}"
+    )
+    target_link_libraries(jellyfin_media_tests PRIVATE Qt6::Core Qt6::Qml Qt6::Test)
+    add_test(NAME jellyfin_media COMMAND jellyfin_media_tests)
+
     add_executable(tumblr_screensaver_backend_tests
         tests/TumblrScreensaverBackendTest.cpp
         src/modules/tumblr_screensaver/TumblrScreensaverBackend.cpp
@@ -196,6 +215,7 @@ if(BUILD_TESTING)
         COMMAND "${CMAKE_COMMAND}"
             "-DSOURCE_ROOT=${CMAKE_SOURCE_DIR}"
             "-DRELEASE_VERSION=${PROJECT_VERSION}"
+            "-DRELEASE_TAG=${APP_RELEASE_TAG}"
             -P "${CMAKE_SOURCE_DIR}/tests/ReleaseMetadataTest.cmake"
     )
 endif()

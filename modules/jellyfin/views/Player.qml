@@ -27,6 +27,8 @@ FocusScope {
     property string resumeSetting: "ask"
     property bool autoplayNext: false
     property bool pendingTranscodeRetry: false
+    property bool isTranscoding: false
+    property string pendingTrackSwitch: ""
     property bool stoppedReported: false
     property int pendingStartMs: 0
     property int lastKnownPositionMs: 0
@@ -54,17 +56,41 @@ FocusScope {
 
     function launchMpv() {
         var lowerUrl = streamUrl.toLowerCase()
-        var transcoding = lowerUrl.indexOf("master.m3u8") >= 0 ||
-                          lowerUrl.indexOf("/videos/") < 0
-        var audioTrack = transcoding ? 0 : JellyfinMedia.selectedAudioTrack(audioStreams, audioIdx)
-        var subtitleTrack = transcoding ? -2 : JellyfinMedia.selectedSubtitleTrack(subtitleStreams, subtitleIdx)
-        var subtitleFiles = transcoding ? [] : JellyfinMedia.selectedSubtitleFiles(subtitleStreams, subtitleIdx)
+        isTranscoding = lowerUrl.indexOf("master.m3u8") >= 0 ||
+                        lowerUrl.indexOf("/videos/") < 0
+        var audioTrack = isTranscoding ? 0 : JellyfinMedia.selectedAudioTrack(audioStreams, audioIdx)
+        var subtitleTrack = isTranscoding ? -2 : JellyfinMedia.selectedSubtitleTrack(subtitleStreams, subtitleIdx)
+        var subtitleFiles = isTranscoding ? [] : JellyfinMedia.selectedSubtitleFiles(subtitleStreams, subtitleIdx)
+        var extraArguments = []
+        if (isTranscoding) {
+            var audioName = "Off"
+            if (audioStreams[audioIdx])
+                audioName = audioStreams[audioIdx].displayTitle ||
+                            audioStreams[audioIdx].title ||
+                            audioStreams[audioIdx].language || "Unknown"
+            audioName = String(audioName).replace(/\s+/g, "_").replace(/[,=]/g, "")
+
+            var subtitleName = "Off"
+            if (subtitleStreams[subtitleIdx])
+                subtitleName = subtitleStreams[subtitleIdx].displayTitle ||
+                               subtitleStreams[subtitleIdx].title ||
+                               subtitleStreams[subtitleIdx].language || "Unknown"
+            subtitleName = String(subtitleName).replace(/\s+/g, "_").replace(/[,=]/g, "")
+
+            extraArguments = [
+                "--script-opts-append=transcode-audio=" + audioName,
+                "--script-opts-append=audio-cycle=" + (audioStreams.length > 0 ? "1" : "0"),
+                "--script-opts-append=transcode-sub=" + subtitleName,
+                "--script-opts-append=sub-cycle=" + (subtitleStreams.length > 1 ? "1" : "0")
+            ]
+        }
         mpvController.loadAndPlayWithOptions(streamUrl, {
             startSeconds: pendingStartMs / 1000.0,
             audioTrack: audioTrack,
             subtitleTrack: subtitleTrack,
             subtitleFiles: subtitleFiles,
-            httpHeaderFields: httpHeaders
+            httpHeaderFields: httpHeaders,
+            extraArguments: extraArguments
         })
     }
 
@@ -103,6 +129,8 @@ FocusScope {
         applyTrackPreferences()
         stoppedReported = false
         pendingTranscodeRetry = false
+        isTranscoding = false
+        pendingTrackSwitch = ""
         lastKnownPositionMs = 0
         lastKnownDurationMs = 0
         segments = []
@@ -200,7 +228,38 @@ FocusScope {
             mpvController.seekTo(activeSegment.endMs)
             mpvController.clearOsdPrompt()
         }
+        function onSubtitleCycleRequested() {
+            if (!isTranscoding || subtitleStreams.length <= 1 || pendingTrackSwitch !== "") return
+            lastKnownPositionMs = Math.max(lastKnownPositionMs, mpvController.position)
+            pendingTrackSwitch = "subtitle"
+            mpvController.stop()
+        }
+        function onAudioCycleRequested() {
+            if (!isTranscoding || audioStreams.length <= 1 || pendingTrackSwitch !== "") return
+            lastKnownPositionMs = Math.max(lastKnownPositionMs, mpvController.position)
+            pendingTrackSwitch = "audio"
+            mpvController.stop()
+        }
         function onPlaybackEnded(finalPositionMs, finalDurationMs, reason) {
+            if (pendingTrackSwitch !== "") {
+                var switchType = pendingTrackSwitch
+                pendingTrackSwitch = ""
+                lastKnownPositionMs = Math.max(lastKnownPositionMs, finalPositionMs)
+                reportStopped(false)
+                stoppedReported = false
+
+                if (switchType === "audio")
+                    audioIdx = (audioIdx + 1) % audioStreams.length
+                else
+                    subtitleIdx = (subtitleIdx + 1) % subtitleStreams.length
+
+                jellyfinBackend.set_last_track_languages(
+                    JellyfinMedia.selectedLanguage(audioStreams, audioIdx, ""),
+                    JellyfinMedia.selectedLanguage(subtitleStreams, subtitleIdx, "__off__"))
+                streamUrl = ""
+                requestPlayback(lastKnownPositionMs || pendingStartMs, true)
+                return
+            }
             if (reason === "failed" && !pendingTranscodeRetry &&
                     streamUrl.toLowerCase().indexOf("master.m3u8") < 0) {
                 reportStopped(true)

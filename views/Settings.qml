@@ -47,6 +47,48 @@ FocusScope {
             if (installedModules[sm].id === startupId)
                 startupRow.value = installedModules[sm].name
         }
+
+        var displays = appCore.displayOptions()
+        var controllerLabels = ["Automatic"]
+        var controllerValues = [-1]
+        var mediaLabels = ["Automatic", "Same as Controller"]
+        var mediaValues = [-1, -2]
+        for (var displayIndex = 0; displayIndex < displays.length; displayIndex++) {
+            controllerLabels.push(displays[displayIndex].label)
+            controllerValues.push(displays[displayIndex].id)
+            mediaLabels.push(displays[displayIndex].label)
+            mediaValues.push(displays[displayIndex].id)
+        }
+
+        var controllerStored = appSettings["controller_display_index"] !== undefined
+                ? Number(appSettings["controller_display_index"]) : -1
+        var controllerOption = controllerValues.indexOf(controllerStored)
+        if (controllerOption < 0) controllerOption = 0
+        items.push({
+            type: "list_single",
+            key: "controller_display_index",
+            label: "Controller Display",
+            options: controllerLabels,
+            values: controllerValues,
+            value: controllerLabels[controllerOption],
+            description: "Display for menus and controls. Takes effect after restart.",
+            moduleId: ""
+        })
+
+        var mediaStored = appSettings["media_display_index"] !== undefined
+                ? Number(appSettings["media_display_index"]) : -1
+        var mediaOption = mediaValues.indexOf(mediaStored)
+        if (mediaOption < 0) mediaOption = 0
+        items.push({
+            type: "list_single",
+            key: "media_display_index",
+            label: "Media Display",
+            options: mediaLabels,
+            values: mediaValues,
+            value: mediaLabels[mediaOption],
+            description: "Display for video and full-screen media. Takes effect after restart.",
+            moduleId: ""
+        })
         items.push({
             type: "list_single",
             key: "color_scheme",
@@ -136,18 +178,13 @@ FocusScope {
         settingsList.positionViewAtIndex(settingsList.currentIndex, ListView.Contain)
     }
 
-    function firstSelectableAfter(idx) {
-        for (var i = idx + 1; i < settingsItems.length; i++) {
-            if (settingsItems[i].type !== "section") return i
+    function nextSelectable(idx, direction) {
+        if (settingsItems.length === 0) return -1
+        for (var step = 1; step <= settingsItems.length; step++) {
+            var candidate = (idx + direction * step + settingsItems.length) % settingsItems.length
+            if (settingsItems[candidate].type !== "section") return candidate
         }
-        return settingsList.currentIndex
-    }
-
-    function firstSelectableBefore(idx) {
-        for (var i = idx - 1; i >= 0; i--) {
-            if (settingsItems[i].type !== "section") return i
-        }
-        return settingsList.currentIndex
+        return idx
     }
 
     Component.onCompleted: buildModel()
@@ -163,6 +200,29 @@ FocusScope {
         anchors.leftMargin: root.sw * 0.125 //80
     }
 
+    property string ipAddress: ""
+    Timer {
+        interval: 5000
+        running: true
+        repeat: true
+        triggeredOnStart: true
+        onTriggered: settingsRoot.ipAddress = appCore.localIpAddress()
+    }
+    Text {
+        text: settingsRoot.ipAddress
+        visible: settingsRoot.ipAddress !== ""
+        anchors.top: parent.top
+        anchors.right: parent.right
+        anchors.topMargin: root.sh * 0.125
+        anchors.rightMargin: root.sw * 0.125
+        font.pixelSize: root.sh * 0.0291667
+        color: root.tertiaryColor
+        font.family: root.globalFont
+        font.capitalization: Font.AllUppercase
+        topPadding: root.sh * 0.0125
+        rightPadding: root.sw * 0.00625
+    }
+
     ListView {
         id: settingsList
         model: settingsItems
@@ -176,12 +236,12 @@ FocusScope {
         focus: true
 
         Keys.onUpPressed: {
-            var prev = settingsRoot.firstSelectableBefore(currentIndex)
-            if (prev !== currentIndex) currentIndex = prev
+            currentIndex = settingsRoot.nextSelectable(currentIndex, -1)
+            settingsList.positionViewAtIndex(currentIndex, ListView.Contain)
         }
         Keys.onDownPressed: {
-            var next = settingsRoot.firstSelectableAfter(currentIndex)
-            if (next !== currentIndex) currentIndex = next
+            currentIndex = settingsRoot.nextSelectable(currentIndex, 1)
+            settingsList.positionViewAtIndex(currentIndex, ListView.Contain)
         }
 
         Keys.onLeftPressed: {
@@ -293,18 +353,43 @@ FocusScope {
                         bottomPadding: root.sh * 0.00625 //3
                         font.pixelSize: root.sh * 0.0375 //18
                     }
-                    Text {
+                    Item {
+                        id: valueClip
                         visible: modelData.type === "list_single"
-                        text: modelData.value || ""
-                        color: settingsList.currentIndex === index ? root.surfaceColor : root.primaryColor
-                        font.family: root.globalFont
-                        font.capitalization: Font.AllUppercase
-                        anchors.verticalCenter: parent.verticalCenter
-                        topPadding: root.sh * 0.0041667 //2
-                        leftPadding: root.sw * 0.009375 //6
-                        rightPadding: root.sw * 0.009375 //6
-                        bottomPadding: root.sh * 0.00625 //3
-                        font.pixelSize:root.sh * 0.05 //24
+                        width: Math.min(valueText.implicitWidth, root.sw * 0.35)
+                        height: parent.height
+                        clip: true
+
+                        Text {
+                            id: valueText
+                            text: modelData.value || ""
+                            color: settingsList.currentIndex === index ? root.surfaceColor : root.primaryColor
+                            font.family: root.globalFont
+                            font.capitalization: Font.AllUppercase
+                            anchors.verticalCenter: parent.verticalCenter
+                            x: 0
+                            topPadding: root.sh * 0.0041667 //2
+                            leftPadding: root.sw * 0.009375 //6
+                            rightPadding: root.sw * 0.009375 //6
+                            bottomPadding: root.sh * 0.00625 //3
+                            font.pixelSize: root.sh * 0.05 //24
+                        }
+
+                        SequentialAnimation {
+                            running: settingsList.currentIndex === index && valueText.implicitWidth > valueClip.width
+                            loops: Animation.Infinite
+                            onRunningChanged: if (!running) valueText.x = 0
+
+                            PauseAnimation { duration: 1500 }
+                            NumberAnimation {
+                                target: valueText
+                                property: "x"
+                                to: valueClip.width - valueText.implicitWidth
+                                duration: Math.abs(to) * 20
+                            }
+                            PauseAnimation { duration: 2000 }
+                            PropertyAction { target: valueText; property: "x"; value: 0 }
+                        }
                     }
                     Text {
                         visible: modelData.type === "submenu" || modelData.type === "system_submenu" || modelData.type === "list_single"
@@ -318,6 +403,32 @@ FocusScope {
                     }
                 }
             }
+        }
+    }
+
+    Rectangle {
+        id: rowHelpBackground
+        property var currentRow: settingsRoot.settingsItems[settingsList.currentIndex]
+        visible: !!(currentRow && currentRow.description)
+        color: root.accentColor
+        anchors.bottom: parent.bottom
+        anchors.left: parent.left
+        anchors.bottomMargin: root.sh * 0.1583333
+        anchors.leftMargin: root.sw * 0.125
+        width: root.sw * 0.75
+        height: root.sh * 0.0583333
+        clip: true
+
+        Text {
+            text: (rowHelpBackground.currentRow && rowHelpBackground.currentRow.description) || ""
+            color: root.surfaceColor
+            font.family: root.globalFont
+            font.pixelSize: root.sh * 0.0291667
+            wrapMode: Text.WordWrap
+            anchors.fill: parent
+            anchors.margins: root.sw * 0.0125
+            horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
         }
     }
 

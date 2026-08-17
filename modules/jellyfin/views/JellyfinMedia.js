@@ -106,6 +106,17 @@ function playbackTitle(item) {
     return item.title || item.name || ""
 }
 
+function listTitle(item, includeSeries) {
+    if (!item) return ""
+    if (item.type !== "episode") return item.title || item.name || ""
+
+    var title = item.name || item.title || ""
+    var prefix = item.episodeCode || ""
+    if (includeSeries && item.seriesName)
+        prefix = item.seriesName + (prefix ? " - " + prefix : "")
+    return prefix ? prefix + ": " + title : title
+}
+
 function buildSubtitleStreams(item) {
     var subs = [{ "id": "-1", "mpvTrack": -1, "displayTitle": "OFF", "subFile": "" }]
     var loaded = item && item.subtitleStreams ? item.subtitleStreams : []

@@ -20,6 +20,12 @@ local A_TRANS  = "&HFF&"
 local A_DIM    = "&H99&"  -- 40% opacity for unfocused seek fill
 
 local function get_audio_str()
+    local transcode_audio = mp.get_opt("transcode-audio")
+    if transcode_audio and transcode_audio ~= "" then
+        if transcode_audio:upper() == "OFF" then return "(NONE)" end
+        return (transcode_audio:gsub("_", " ")):upper()
+    end
+
     local id = mp.get_property_number("current-tracks/audio/id", 0)
     if id == 0 then return "(NONE)" end
     local title    = (mp.get_property("current-tracks/audio/title", "") or ""):upper()
@@ -37,6 +43,12 @@ local function get_audio_str()
 end
 
 local function get_sub_str()
+    local transcode_sub = mp.get_opt("transcode-sub")
+    if transcode_sub and transcode_sub ~= "" then
+        if transcode_sub:upper() == "OFF" then return "(NONE)" end
+        return (transcode_sub:gsub("_", " ")):upper()
+    end
+
     local id = mp.get_property_number("current-tracks/sub/id", 0)
     if id == 0 then return "(NONE)" end
     local title = (mp.get_property("current-tracks/sub/title", "") or ""):upper()
@@ -49,9 +61,18 @@ local function get_sub_str()
     return table.concat(parts, " ")
 end
 
+local sub_cycle = mp.get_opt("sub-cycle") == "1"
+local audio_cycle = mp.get_opt("audio-cycle") == "1"
+
 local btn_actions = {
-    function() mp.command("no-osd cycle audio") end,
-    function() mp.command("no-osd cycle sub") end,
+    function()
+        if audio_cycle then mp.commandv("script-message", "cycle-audio")
+        else mp.command("no-osd cycle audio") end
+    end,
+    function()
+        if sub_cycle then mp.commandv("script-message", "cycle-sub")
+        else mp.command("no-osd cycle sub") end
+    end,
     function() mp.command("no-osd cycle-values panscan 0 1") end,
     function() mp.command("quit") end,
     function() mp.command("playlist-prev") end,
@@ -59,6 +80,7 @@ local btn_actions = {
 }
 
 local function has_subtitle_tracks()
+    if sub_cycle then return true end
     local tracks = mp.get_property_native("track-list", {})
     for _, t in ipairs(tracks) do
         if t.type == "sub" then return true end
@@ -315,8 +337,8 @@ local function toggle_menu()
 
         mp.add_forced_key_binding("UP",    "menu-up",    function() update_nav("up")    end)
         mp.add_forced_key_binding("DOWN",  "menu-down",  function() update_nav("down")  end)
-        mp.add_forced_key_binding("LEFT",  "menu-left",  function() update_nav("left")  end)
-        mp.add_forced_key_binding("RIGHT", "menu-right", function() update_nav("right") end)
+        mp.add_forced_key_binding("LEFT",  "menu-left",  function() update_nav("left")  end, {repeatable = true})
+        mp.add_forced_key_binding("RIGHT", "menu-right", function() update_nav("right") end, {repeatable = true})
         mp.add_forced_key_binding("ENTER", "menu-enter", function() update_nav("enter") end)
         mp.add_forced_key_binding("ESC",   "menu-esc",   toggle_menu)
         mp.add_forced_key_binding("BS",    "menu-bs",    toggle_menu)

@@ -35,6 +35,7 @@ public:
     int position()    const { return m_position;    }
     int duration()    const { return m_duration;    }
     int playlistPos() const { return m_playlistPos; }
+    void setPlaybackScreenIndex(int index) { m_playbackScreenIndex = index; }
 
     Q_INVOKABLE void loadAndPlay(const QString &url, float startSeconds,
                                   int audioTrack, int subTrack,
@@ -72,6 +73,8 @@ signals:
     void playlistPosChanged(int pos);
     void mpvKeyPressed(const QString &key);
     void skipRequested();
+    void subtitleCycleRequested();
+    void audioCycleRequested();
     void playbackItemLoaded(int playlistIndex);
     void playbackItemEnded(int playlistIndex, const QString &reason, const QString &error);
     // Emitted exactly once when the mpv process exits. `reason` is "eof",
@@ -124,6 +127,7 @@ private:
     int           m_position     = 0;
     int           m_duration     = 0;
     int           m_playlistPos  = -1;
+    int           m_playbackScreenIndex = -1;
     bool          m_headlessMode = false;
     bool          m_pendingStartClear = false;
     bool          m_paused = false;

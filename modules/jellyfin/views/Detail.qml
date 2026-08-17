@@ -46,14 +46,14 @@ FocusScope {
     focus: true
 
     Keys.onUpPressed: {
-        if (focusRow > 0)
-            focusRow--
+        if (!detail) return
+        var maxRow = JellyfinMedia.maxTrackFocusRow(audioStreams, subtitleStreams)
+        focusRow = (focusRow - 1 + maxRow + 1) % (maxRow + 1)
     }
     Keys.onDownPressed: {
         if (detail) {
             var maxRow = JellyfinMedia.maxTrackFocusRow(audioStreams, subtitleStreams)
-            if (focusRow < maxRow)
-                focusRow++
+            focusRow = (focusRow + 1) % (maxRow + 1)
         }
     }
     Keys.onLeftPressed: {

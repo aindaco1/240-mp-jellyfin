@@ -47,6 +47,7 @@ For packaging, CI, and config paths, see **[BUILDING.md](BUILDING.md)** and **[I
 - Every module's QML entry point is `Root.qml`. Views are `FocusScope`s that pass state via `navParams` and communicate through `navigateTo` / `goBack`.
 - Size QML layouts with `root.sh` / `root.sw`.
 - Config is `config.json` under `~/Library/Application Support/240-mp-jellyfin/`.
+- Controller and media display roles are selected independently; automatic keeps the controller on the primary screen and media on the first other screen, while explicit changes take effect after restart.
 - Jellyfin auth is `jellyfin_auth.json`; passwords are never persisted.
 - Karaoke stores a non-secret 24-hour catalog cache, persistent queue, and generated playback playlist under the same app data directory.
 - Tumblr stores its current URL and normalized favorites list in `config.json`; GIFs use the shared `TumblrMedia.qml` static/animated renderer.

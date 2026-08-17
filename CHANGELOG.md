@@ -4,6 +4,25 @@ All notable changes to 240-mp-jellyfin are documented here.
 
 ## [Unreleased]
 
+## [1.4.0-rc1] - 2026-08-17
+
+### Added
+
+- Added independent Controller Display and Media Display selectors. Automatic preserves the existing primary-controller/other-display media handoff, while either role can target a specific attached display and media can explicitly share the controller display after restart.
+- Added in-playback audio and subtitle switching for Jellyfin transcodes. The OSD closes the active server session, requests the next selected track, and resumes the new HLS transcode at the current position.
+- Added the preferred local IPv4 address to Settings, episode codes to Jellyfin episode rows, wraparound navigation across the app shell and active Jellyfin/Local lists, repeatable held-key OSD seeking, and a GNU Unifont fallback for CJK, Hangul, and other glyphs missing from VCR OSD Mono.
+
+### Fixed
+
+- Fixed Jellyfin direct play for high-bitrate media by sending an explicit 1000 Mbps streaming ceiling instead of omitting `MaxStreamingBitrate`.
+- Fixed Settings scrolling after wraparound and bounded long display names with the same selected-row marquee behavior used elsewhere.
+
+### Changed
+
+- Selectively incorporated the relevant macOS, navigation, and Jellyfin improvements from upstream [240-MP v2026.08.17](https://github.com/anthonycaccese/240-MP/releases/tag/v2026.08.17). The upstream Scripts module, Plex PIN profiles, non-macOS platform work, and unrelated new modules remain out of scope for this fork.
+- Release metadata now declares the exact prerelease tag separately from the numeric bundle version, and CI rejects a tag that disagrees with either value.
+- Added an Apple Silicon pull-request CI gate for release builds, the complete CTest suite, QML lint, and an mpv OSD smoke test before changes reach the tag-triggered signing workflow.
+
 ## [1.3.1] - 2026-08-17
 
 ### Added
