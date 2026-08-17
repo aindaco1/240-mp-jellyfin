@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(240mp VERSION 1.3.0 LANGUAGES CXX)
+project(240mp VERSION 1.3.1 LANGUAGES CXX)
 
 if(NOT APPLE)
     message(FATAL_ERROR "This fork is macOS-only. Configure and build it on macOS.")
@@ -183,6 +183,21 @@ if(BUILD_TESTING)
     )
     target_link_libraries(tumblr_media_qml_tests PRIVATE Qt6::Core Qt6::Gui Qt6::Quick Qt6::Qml Qt6::Test)
     add_test(NAME tumblr_media_qml COMMAND tumblr_media_qml_tests)
+
+    add_test(
+        NAME macos_dmg_contract
+        COMMAND /bin/zsh
+            "${CMAKE_SOURCE_DIR}/tests/MacosDmgContractTest.zsh"
+            "${CMAKE_SOURCE_DIR}/scripts/macos_dmg_contract.zsh"
+    )
+
+    add_test(
+        NAME release_metadata
+        COMMAND "${CMAKE_COMMAND}"
+            "-DSOURCE_ROOT=${CMAKE_SOURCE_DIR}"
+            "-DRELEASE_VERSION=${PROJECT_VERSION}"
+            -P "${CMAKE_SOURCE_DIR}/tests/ReleaseMetadataTest.cmake"
+    )
 endif()
 
 # ── macOS bundle metadata ──────────────────────────────────────────────────────

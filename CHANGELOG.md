@@ -4,6 +4,13 @@ All notable changes to 240-mp-jellyfin are documented here.
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-08-17
+
+### Added
+
+- Added a standard Applications shortcut to the signed DMG for a clear drag-to-install flow and optional compatibility with cautious single-app DMG handlers such as EasyDMG.
+- Added one fail-closed DMG contract shared by release staging, final notarized-image verification, and the recovery workflow. It requires the exact two-entry layout and rechecks image integrity, app identity, Developer ID team, version, Apple Silicon architecture, signatures, stapled tickets, and Gatekeeper acceptance before publication.
+
 ## [1.3.0] - 2026-08-15
 
 ### Added
