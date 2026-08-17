@@ -129,7 +129,7 @@ FocusScope {
         currentEntryId = queue[index].entryId
         currentQueueIndex = index
         karaokeBackend.resetQueueEntry(currentEntryId)
-        usingTransitionOutput = root.openMediaOutput(false, false)
+        usingTransitionOutput = root.hasMediaOutputScreen
         mpvController.loadAndPlay(playlistPath, 0.0, 0, -1, [], false,
                                   index, 0.0, "", false, "karaoke", false,
                                   [], "", karaokeInputBindings())
@@ -140,8 +140,7 @@ FocusScope {
             return
         leaving = true
         mpvController.stop()
-        if (usingTransitionOutput)
-            root.closeMediaOutput()
+        usingTransitionOutput = false
         goBack()
     }
 
@@ -261,8 +260,7 @@ FocusScope {
                     pendingError = "mpv could not play this queue"
                 }
                 finalizePendingOutcome(false)
-                if (usingTransitionOutput)
-                    root.closeMediaOutput()
+                usingTransitionOutput = false
                 playbackErrorVisible = true
                 playbackErrorText = "KARAOKE PLAYBACK FAILED - THE SONG REMAINS IN THE QUEUE"
                 return
@@ -272,8 +270,7 @@ FocusScope {
                 pendingOutcome = "completed"
             }
             finalizePendingOutcome(false)
-            if (usingTransitionOutput)
-                root.closeMediaOutput()
+            usingTransitionOutput = false
             goBack()
         }
         function onMpvKeyPressed(key) {
@@ -339,6 +336,14 @@ FocusScope {
         onTriggered: transitionOverlay.reveal()
     }
 
+    MediaOutputLease {
+        host: root
+        enabled: playerRoot.usingTransitionOutput
+        requested: transitionOverlay.phase !== "idle"
+        opaque: true
+        acceptsFocus: false
+    }
+
     PlaybackTransitionOverlay {
         id: transitionOverlay
         parent: playerRoot.usingTransitionOutput ? root.mediaOutputLayer : playerRoot
@@ -383,8 +388,4 @@ FocusScope {
     function pad(value) { return value < 10 ? "0" + value : "" + value }
 
     Component.onCompleted: startPlayback()
-    Component.onDestruction: {
-        if (usingTransitionOutput)
-            root.closeMediaOutput()
-    }
 }

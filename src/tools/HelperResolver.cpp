@@ -102,7 +102,8 @@ QStringList youtubeMpvArguments(const QString &appRoot)
     if (!ytDlpPath.isEmpty()) {
         arguments << QStringLiteral("--script-opts-append=ytdl_hook-ytdl_path=") + ytDlpPath
                   << QStringLiteral("--ytdl-raw-options-append=ignore-config=")
-                  << QStringLiteral("--ytdl-raw-options-append=no-update=");
+                  << QStringLiteral("--ytdl-raw-options-append=no-update=")
+                  << QStringLiteral("--ytdl-raw-options-append=check-formats=");
     }
     if (!denoPath.isEmpty()) {
         arguments << QStringLiteral("--ytdl-raw-options-append=js-runtimes=deno:") + denoPath;
