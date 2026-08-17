@@ -107,7 +107,7 @@ APP_ROOT=$(pwd) ./build/240-mp-jellyfin.app/Contents/MacOS/240-mp-jellyfin
 
 ## Install
 
-See [INSTALL.md](INSTALL.md). [Download the 240-mp-jellyfin 1.4.0 release candidate for Apple Silicon](https://github.com/aindaco1/240-mp-jellyfin/releases/download/v1.4.0-rc1/240-mp-jellyfin-v1.4.0-rc1-macOS-arm64.dmg), open the notarized DMG, and drag the app onto its Applications shortcut. If EasyDMG is already configured as the Mac's default DMG handler, the same single-app image can automate that copy; no additional installer is required. Checksums and release notes remain available from [GitHub Releases](https://github.com/aindaco1/240-mp-jellyfin/releases).
+See [INSTALL.md](INSTALL.md). [Download the 240-mp-jellyfin 1.4.0 release candidate for Apple Silicon](https://github.com/aindaco1/240-mp-jellyfin/releases/download/v1.4.0-rc2/240-mp-jellyfin-v1.4.0-rc2-macOS-arm64.dmg), open the notarized DMG, and drag the app onto its Applications shortcut. If EasyDMG is already configured as the Mac's default DMG handler, the same single-app image can automate that copy; no additional installer is required. Checksums and release notes remain available from [GitHub Releases](https://github.com/aindaco1/240-mp-jellyfin/releases).
 
 Signed releases can check, download, verify, and install later versions from **Settings → Software Update**. The updater verifies GitHub's SHA-256 digest, Apple notarization, the Developer ID team, bundle identity, version, and Apple Silicon architecture before replacing the app.
 

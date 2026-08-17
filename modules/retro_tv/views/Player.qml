@@ -190,15 +190,11 @@ FocusScope {
 
     function showStaticOutput() {
         staticOverlayVisible = true
-        if (usingExternalOutput)
-            root.openMediaOutput(true, false)
         staticCanvas.requestPaint()
     }
 
     function hideStaticOutput() {
         staticOverlayVisible = false
-        if (usingExternalOutput)
-            root.closeMediaOutput()
     }
 
     function showControls() {
@@ -644,6 +640,14 @@ FocusScope {
         onTriggered: hideStaticOutput()
     }
 
+    MediaOutputLease {
+        host: root
+        enabled: playerRoot.usingExternalOutput
+        requested: playerRoot.staticOverlayVisible && playerRoot.staticTransitions
+        opaque: true
+        acceptsFocus: false
+    }
+
     PlaybackControlPanel {
         anchors.fill: parent
         visible: !filterPanelVisible && loadState === "playing"
@@ -894,10 +898,5 @@ FocusScope {
             loadState = "error"
             errorText = message
         })
-    }
-
-    Component.onDestruction: {
-        if (usingExternalOutput)
-            root.closeMediaOutput()
     }
 }

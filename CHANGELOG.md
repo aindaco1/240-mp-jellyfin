@@ -4,6 +4,13 @@ All notable changes to 240-mp-jellyfin are documented here.
 
 ## [Unreleased]
 
+## [1.4.0-rc2] - 2026-08-17
+
+### Fixed
+
+- Fixed Karaoke playback being hidden on the media display by keeping the auxiliary Qt output window open only while a transition is visible.
+- Fixed Retro channels failing on stale YouTube stream selections by making yt-dlp validate candidate formats before handing them to mpv.
+
 ## [1.4.0-rc1] - 2026-08-17
 
 ### Added

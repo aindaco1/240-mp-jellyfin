@@ -13,7 +13,7 @@ set(CMAKE_AUTOMOC ON)
 # is reached through a symlink such as macOS's /tmp -> /private/tmp.
 set(CMAKE_AUTOMOC_PATH_PREFIX ON)
 set(APP_DISPLAY_NAME "240-mp-jellyfin")
-set(APP_RELEASE_TAG "v1.4.0-rc1")
+set(APP_RELEASE_TAG "v1.4.0-rc2")
 set(APP_BUNDLE_IDENTIFIER "com.240mp.jellyfin" CACHE STRING "macOS bundle identifier")
 set(APP_UPDATE_REPOSITORY "aindaco1/240-mp-jellyfin" CACHE STRING "GitHub update repository")
 set(APP_UPDATE_TEAM_ID "PWT3Q52LZ2" CACHE STRING "Expected Developer ID team for updates")
@@ -151,6 +151,36 @@ if(BUILD_TESTING)
     )
     target_link_libraries(ambient_mode_qml_tests PRIVATE Qt6::Core Qt6::Gui Qt6::Quick Qt6::Qml Qt6::Test)
     add_test(NAME ambient_mode_qml COMMAND ambient_mode_qml_tests)
+
+    add_executable(media_output_lease_tests
+        tests/MediaOutputLeaseTest.cpp
+    )
+    target_compile_definitions(media_output_lease_tests PRIVATE
+        TEST_SOURCE_ROOT="${CMAKE_SOURCE_DIR}"
+    )
+    target_link_libraries(media_output_lease_tests PRIVATE Qt6::Core Qt6::Qml Qt6::Test)
+    add_test(NAME media_output_lease COMMAND media_output_lease_tests)
+
+    add_executable(mpv_controller_tests
+        tests/MpvControllerTest.cpp
+        src/player/MpvController.cpp
+        src/tools/HelperResolver.cpp
+        src/AppCore.cpp
+    )
+    target_include_directories(mpv_controller_tests PRIVATE src)
+    target_link_libraries(mpv_controller_tests PRIVATE
+        Qt6::Core Qt6::Gui Qt6::Qml Qt6::Network Qt6::Test
+    )
+    add_test(NAME mpv_controller COMMAND mpv_controller_tests)
+
+    add_executable(retro_tv_data_tests
+        tests/RetroTvDataTest.cpp
+    )
+    target_compile_definitions(retro_tv_data_tests PRIVATE
+        TEST_SOURCE_ROOT="${CMAKE_SOURCE_DIR}"
+    )
+    target_link_libraries(retro_tv_data_tests PRIVATE Qt6::Core Qt6::Qml Qt6::Test)
+    add_test(NAME retro_tv_data COMMAND retro_tv_data_tests)
 
     add_executable(local_files_backend_tests
         tests/LocalFilesBackendTest.cpp
