@@ -94,6 +94,7 @@ target_link_libraries(240mp PRIVATE
     Qt6::Svg
     OpenSSL::Crypto
     "-framework AppKit"
+    "-framework CoreFoundation"
     "-framework IOKit"
     "-framework GameController"
 )
@@ -242,7 +243,9 @@ if(BUILD_TESTING)
         src/modules/nature/NatureBackend.cpp
     )
     target_include_directories(nature_backend_tests PRIVATE src)
-    target_link_libraries(nature_backend_tests PRIVATE Qt6::Core Qt6::Network Qt6::Test)
+    target_link_libraries(nature_backend_tests PRIVATE
+        Qt6::Core Qt6::Network Qt6::Test "-framework CoreFoundation"
+    )
     add_test(NAME nature_backend COMMAND nature_backend_tests)
 
     add_test(

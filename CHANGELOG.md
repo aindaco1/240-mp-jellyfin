@@ -8,7 +8,7 @@ All notable changes to 240-mp-jellyfin are documented here.
 
 ### Added
 
-- Added a keyboard-first Nature module that cycles through up to 100 recent research-grade iNaturalist observations, showing only the common name, scientific species name, and normalized city/state-or-province/country in a compact overlay.
+- Added a keyboard-first Nature module that cycles through up to 100 recent research-grade iNaturalist observations, showing only the common name, scientific species name, and an English-preferred `City, State/Province, Country` line in a compact overlay.
 - Added a schema-versioned, owner-only metadata cache with one-hour freshness, stale-while-refresh behavior, atomic writes, bounded payloads, and an opt-in live iNaturalist integration test.
 
 ### Changed
@@ -17,7 +17,7 @@ All notable changes to 240-mp-jellyfin are documented here.
 
 ### Security
 
-- Nature makes anonymous API requests, rate-limits refreshes, accepts only research-grade non-captive observations, and independently revalidates every photo as CC0 on iNaturalist's HTTPS open-data host before display or cache reuse. It stores normalized public place components rather than coordinates and never caches image files.
+- Nature makes anonymous, bounded API requests, rate-limits refreshes, resolves English place names with one capped iNaturalist Places batch when available, and uses offline transliteration for remaining non-Latin locality names. It accepts only research-grade non-captive observations and independently revalidates every photo as CC0 on iNaturalist's HTTPS open-data host before display or cache reuse. It stores normalized public place components rather than coordinates and never caches image files.
 
 ## [1.4.1] - 2026-08-17
 

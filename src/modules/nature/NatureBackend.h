@@ -2,6 +2,7 @@
 
 #include <QDateTime>
 #include <QElapsedTimer>
+#include <QList>
 #include <QNetworkAccessManager>
 #include <QObject>
 #include <QPointer>
@@ -35,8 +36,15 @@ private:
 
     void beginRefresh(bool hasCachedObservations);
     void handleReply(QNetworkReply *reply);
+    void beginPlaceResolution(const QVariantList &observations);
+    void handlePlacesReply(QNetworkReply *reply);
+    void finishRefresh(QVariantList observations);
+    QNetworkReply *getJson(const QUrl &url);
     QUrl requestUrl() const;
+    QUrl placesRequestUrl(const QList<qint64> &placeIds) const;
     QVariantList observationsFromPayload(const QByteArray &payload, QString *error) const;
+    QVariantList observationsWithEnglishPlaces(const QVariantList &observations,
+                                                const QByteArray &payload) const;
     QVariantMap itemFromObservation(const QJsonObject &observation) const;
     QUrl largePhotoUrl(const QString &url, const QString &licenseCode) const;
     QVariantMap validatedCachedItem(const QJsonObject &object) const;
@@ -51,6 +59,7 @@ private:
     QString m_dataRoot;
     QString m_cachePath;
     QVariantList m_lastObservations;
+    QVariantList m_pendingObservations;
     QElapsedTimer m_lastRequestStarted;
     bool m_refreshQueued = false;
     bool m_queuedRefreshHasCache = false;

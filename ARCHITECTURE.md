@@ -291,11 +291,11 @@ The Tumblr module lives in `modules/tumblr_screensaver/` and `src/modules/tumblr
 
 Nature lives in `modules/nature/` and `src/modules/nature/`.
 
-- `NatureBackend` makes one anonymous request to iNaturalist's v1 observations API for up to 100 recent research-grade, non-captive observations with photos. Rapid manual refreshes are coalesced to at most one request per second.
+- `NatureBackend` makes one anonymous request to iNaturalist's v1 observations API for up to 100 recent research-grade, non-captive observations with photos, followed when place IDs are available by one bounded batch request to the Places API. Rapid manual refreshes are coalesced to at most one refresh per second.
 - API filtering is treated as a first pass: every chosen photo is independently restricted to `cc0`, must use HTTPS on `inaturalist-open-data.s3.amazonaws.com`, and is normalized to iNaturalist's 1024-pixel `large` variant. One eligible photo is selected per observation. CC0 keeps the requested image overlay free of a mandatory credit line while still providing a full 100-item live rotation.
-- The backend maps the common/scientific names and rightmost public `place_guess` components into city, state-or-province, and country. It removes US postal suffixes, expands two-letter country codes through Qt's locale data, discards leading venue/park components, and does not expose coordinates or private location fields.
+- The backend maps the common/scientific names and rightmost public `place_guess` components into city, state-or-province, and country, then prefers English town/state/country names from the observation's public iNaturalist place IDs when available. The IDs are resolved in one capped batch and never persisted. If no English record exists, Latin-script official names are preserved and non-Latin names receive an offline Core Foundation transliteration fallback. The backend removes US postal suffixes, expands two-letter country codes through Qt's locale data, discards leading venue/park components, and does not expose coordinates or private location fields.
 - `nature_observations.json` is an atomic, schema-versioned, owner-only metadata cache capped at 100 records and 2 MiB. Cached URLs and licenses are revalidated before reuse. A fresh cache avoids a request; stale data is emitted immediately and refreshed in the background; failed refreshes leave saved observations visible. Image files are never persisted.
-- `Player.qml` uses the same `ImageMontage` and `MontageMedia` path as Tumblr, adding a compact three-line name/species/location panel and keyboard controls for next, pause, refresh, source observation, and back.
+- `Player.qml` uses the same `ImageMontage` and `MontageMedia` path as Tumblr, adding a compact three-line name/species/`City, State/Province, Country` panel and keyboard controls for next, pause, refresh, source observation, and back.
 
 ## Track Selection
 

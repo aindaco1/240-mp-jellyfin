@@ -51,7 +51,7 @@ For packaging, CI, and config paths, see **[BUILDING.md](BUILDING.md)** and **[I
 - Jellyfin auth is `jellyfin_auth.json`; passwords are never persisted.
 - Karaoke stores a non-secret 24-hour catalog cache, persistent queue, and generated playback playlist under the same app data directory.
 - Tumblr stores its current URL and normalized favorites list in `config.json`; Tumblr and Nature share the tested `ImageMontage.qml` / `MontageMedia.qml` still/GIF transition path.
-- Nature anonymously fetches up to 100 research-grade iNaturalist observations, accepts only independently validated CC0 photos from the HTTPS open-data host, exposes only name/species and normalized city/state-or-province/country in its compact overlay, and keeps an owner-only metadata cache without image files.
+- Nature anonymously fetches up to 100 research-grade iNaturalist observations, uses one capped Places batch to prefer English public place names, accepts only independently validated CC0 photos from the HTTPS open-data host, exposes only name/species and comma-separated `City, State/Province, Country` in its compact overlay, and keeps an owner-only metadata cache without image files or place IDs.
 - Signed releases update through `UpdateManager`; never weaken its SHA-256, notarization, Developer ID team, bundle ID, version, or arm64 checks.
 - Jellyfin TV playback negotiates PlaybackInfo, reports session progress, can retry through transcoding, and optionally uses server Media Segments for intro/outro skipping.
 - Do not log tokens, passwords, full auth headers, or token-bearing URLs.

@@ -25,6 +25,7 @@ QJsonObject validObservation(qint64 observationId = 42, qint64 photoId = 84)
         {"obscured", true},
         {"geoprivacy", "obscured"},
         {"place_guess", "Maties Sport Office, Stellenbosch, Western Cape, ZA"},
+        {"place_ids", QJsonArray{9001, 9002, 9003}},
         {"observed_on", "2026-08-17"},
         {"species_guess", "Fallback name"},
         {"user", QJsonObject{{"login", "field-notes"}, {"name", "Field Notes"}}},
@@ -60,6 +61,17 @@ QByteArray responsePayload(const QJsonArray &results = QJsonArray{validObservati
         .toJson(QJsonDocument::Compact);
 }
 
+QByteArray placesResponsePayload()
+{
+    const QJsonArray results{
+        QJsonObject{{"id", 9001}, {"name", "South Africa"}, {"admin_level", 0}},
+        QJsonObject{{"id", 9002}, {"name", "Western Cape"}, {"admin_level", 10}},
+        QJsonObject{{"id", 9003}, {"name", "Stellenbosch"}, {"admin_level", 30}}
+    };
+    return QJsonDocument(QJsonObject{{"total_results", results.size()}, {"results", results}})
+        .toJson(QJsonDocument::Compact);
+}
+
 class FakeNatureServer final : public QTcpServer {
     Q_OBJECT
 
@@ -77,10 +89,12 @@ public:
                         return;
                     socket->setProperty("natureAnswered", true);
                     requests.append(request.left(headerEnd));
+                    const bool isPlacesRequest = request.startsWith("GET /v1/places/");
+                    const QByteArray responsePayload = isPlacesRequest ? placesPayload : payload;
                     const QByteArray response =
                         "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: " +
-                        QByteArray::number(payload.size()) +
-                        "\r\nConnection: close\r\n\r\n" + payload;
+                        QByteArray::number(responsePayload.size()) +
+                        "\r\nConnection: close\r\n\r\n" + responsePayload;
                     socket->write(response);
                     socket->disconnectFromHost();
                 });
@@ -90,6 +104,7 @@ public:
     }
 
     QByteArray payload = responsePayload();
+    QByteArray placesPayload = placesResponsePayload();
     QList<QByteArray> requests;
 };
 
@@ -101,6 +116,7 @@ class NatureBackendTest final : public QObject {
 private slots:
     void requestUsesConservativePolicy();
     void mapsOnlyEligiblePhotos();
+    void resolvesEnglishPlaces();
     void filtersIneligibleObservations();
     void cacheRoundTripRejectsTampering();
     void fetchIsAnonymousAndBounded();
@@ -123,6 +139,14 @@ void NatureBackendTest::requestUsesConservativePolicy()
     QCOMPARE(query.queryItemValue(QStringLiteral("order_by")), QStringLiteral("created_at"));
     QCOMPARE(query.queryItemValue(QStringLiteral("order")), QStringLiteral("desc"));
     QCOMPARE(query.queryItemValue(QStringLiteral("per_page")), QStringLiteral("100"));
+    QCOMPARE(query.queryItemValue(QStringLiteral("locale")), QStringLiteral("en"));
+
+    const QUrl places = backend.placesRequestUrl(QList<qint64>{1, 2, 3});
+    QCOMPARE(places.path(), QStringLiteral("/v1/places/1,2,3"));
+    const QUrlQuery placesQuery(places);
+    QCOMPARE(placesQuery.queryItemValue(QStringLiteral("admin_level")),
+             QStringLiteral("0,10,30"));
+    QCOMPARE(placesQuery.queryItemValue(QStringLiteral("locale")), QStringLiteral("en"));
 
     QCOMPARE(backend.largePhotoUrl(
                  QStringLiteral("https://inaturalist-open-data.s3.amazonaws.com/photos/1/square.JPG"),
@@ -169,6 +193,55 @@ void NatureBackendTest::mapsOnlyEligiblePhotos()
     QCOMPARE(item.value(QStringLiteral("licenseCode")).toString(), QStringLiteral("cc0"));
     QCOMPARE(item.value(QStringLiteral("observationUrl")).toString(),
              QStringLiteral("https://www.inaturalist.org/observations/42"));
+    QCOMPARE(item.value(QStringLiteral("placeIds")).toList().size(), 3);
+}
+
+void NatureBackendTest::resolvesEnglishPlaces()
+{
+    QTemporaryDir dataRoot;
+    QVERIFY(dataRoot.isValid());
+    NatureBackend backend(dataRoot.path());
+
+    QJsonObject observation = validObservation();
+    observation[QStringLiteral("place_guess")] =
+        QStringLiteral("Ленинский р-н, Махачкала, Респ. Дагестан, Россия");
+    observation[QStringLiteral("place_ids")] = QJsonArray{7161, 11799, 22001};
+    QString error;
+    const QVariantList observations = backend.observationsFromPayload(
+        responsePayload(QJsonArray{observation}), &error);
+    const QJsonArray places{
+        QJsonObject{{"id", 7161}, {"name", "Russia"}, {"admin_level", 0}},
+        QJsonObject{{"id", 11799}, {"name", "Dagestan"}, {"admin_level", 10}},
+        QJsonObject{{"id", 22001}, {"name", "Makhachkala"}, {"admin_level", 30}}
+    };
+    const QByteArray payload = QJsonDocument(
+        QJsonObject{{"total_results", places.size()}, {"results", places}})
+        .toJson(QJsonDocument::Compact);
+
+    const QVariantList resolved = backend.observationsWithEnglishPlaces(observations, payload);
+    QCOMPARE(resolved.size(), 1);
+    const QVariantMap item = resolved.constFirst().toMap();
+    QCOMPARE(item.value(QStringLiteral("city")).toString(), QStringLiteral("Makhachkala"));
+    QCOMPARE(item.value(QStringLiteral("region")).toString(), QStringLiteral("Dagestan"));
+    QCOMPARE(item.value(QStringLiteral("country")).toString(), QStringLiteral("Russia"));
+
+    const QJsonArray placesWithoutTown{
+        QJsonObject{{"id", 7161}, {"name", "Russia"}, {"admin_level", 0}},
+        QJsonObject{{"id", 11799}, {"name", "Dagestan"}, {"admin_level", 10}}
+    };
+    const QByteArray fallbackPayload = QJsonDocument(
+        QJsonObject{{"total_results", placesWithoutTown.size()},
+                    {"results", placesWithoutTown}})
+        .toJson(QJsonDocument::Compact);
+    const QVariantMap fallbackItem = backend.observationsWithEnglishPlaces(
+        observations, fallbackPayload).constFirst().toMap();
+    const QString fallbackCity = fallbackItem.value(QStringLiteral("city")).toString();
+    QVERIFY(!fallbackCity.isEmpty());
+    QVERIFY(fallbackCity != QStringLiteral("Махачкала"));
+    for (const QChar character : fallbackCity) {
+        if (character.isLetter())
+            QCOMPARE(character.script(), QChar::Script_Latin);
+    }
 }
 
 void NatureBackendTest::filtersIneligibleObservations()
@@ -224,6 +297,18 @@ void NatureBackendTest::cacheRoundTripRejectsTampering()
     QJsonObject root = QJsonDocument::fromJson(cache.readAll()).object();
     cache.close();
     QJsonArray items = root.value(QStringLiteral("observations")).toArray();
+    QVERIFY(!items.at(0).toObject().contains(QStringLiteral("placeIds")));
+    QJsonObject localized = items.at(0).toObject();
+    localized[QStringLiteral("city")] = QStringLiteral("Махачкала");
+    items[0] = localized;
+    root[QStringLiteral("observations")] = items;
+    QVERIFY(cache.open(QIODevice::WriteOnly | QIODevice::Truncate));
+    cache.write(QJsonDocument(root).toJson(QJsonDocument::Compact));
+    cache.close();
+    QVERIFY(backend.readCache(&restored, &restoredAt));
+    QVERIFY(restored.constFirst().toMap().value(QStringLiteral("city")).toString() !=
+            QStringLiteral("Махачкала"));
+
     QJsonObject tampered = items.at(0).toObject();
     tampered[QStringLiteral("url")] = QStringLiteral("https://example.test/tracker/large.jpg");
     items[0] = tampered;
@@ -250,7 +335,7 @@ void NatureBackendTest::fetchIsAnonymousAndBounded()
     QVERIFY2(loadedSpy.wait(3000), qPrintable(failedSpy.isEmpty()
         ? QStringLiteral("No response received") : failedSpy.constFirst().at(0).toString()));
     QCOMPARE(loadedSpy.constFirst().at(0).toList().size(), 1);
-    QCOMPARE(server.requests.size(), 1);
+    QCOMPARE(server.requests.size(), 2);
 
     const QList<QByteArray> lines = server.requests.constFirst().split('\n');
     const QList<QByteArray> requestLine = lines.constFirst().trimmed().split(' ');
@@ -262,11 +347,24 @@ void NatureBackendTest::fetchIsAnonymousAndBounded()
     QVERIFY(server.requests.constFirst().contains("User-Agent: 240-mp-jellyfin/"));
     QVERIFY(!server.requests.constFirst().contains("Authorization:"));
 
+    const QList<QByteArray> placeLines = server.requests.at(1).split('\n');
+    const QUrl requestedPlaces(QString::fromLatin1(
+        placeLines.constFirst().trimmed().split(' ').value(1)));
+    QVERIFY(requestedPlaces.path().startsWith(QStringLiteral("/v1/places/")));
+    const QUrlQuery placeQuery(requestedPlaces);
+    QCOMPARE(placeQuery.queryItemValue(QStringLiteral("admin_level")),
+             QStringLiteral("0,10,30"));
+    QCOMPARE(placeQuery.queryItemValue(QStringLiteral("locale")), QStringLiteral("en"));
+    QVERIFY(server.requests.at(1).contains("Accept: application/json"));
+    QVERIFY(!server.requests.at(1).contains("Authorization:"));
+    QVERIFY(!loadedSpy.constFirst().at(0).toList().constFirst().toMap()
+                 .contains(QStringLiteral("placeIds")));
+
     for (int attempt = 0; attempt < 5; ++attempt)
         backend.refreshObservations();
     QTest::qWait(150);
-    QCOMPARE(server.requests.size(), 1);
-    QTRY_COMPARE_WITH_TIMEOUT(server.requests.size(), 2, 2000);
+    QCOMPARE(server.requests.size(), 2);
+    QTRY_COMPARE_WITH_TIMEOUT(server.requests.size(), 4, 2000);
     QTRY_COMPARE_WITH_TIMEOUT(loadedSpy.size(), 2, 1000);
 }
 
@@ -292,6 +390,25 @@ void NatureBackendTest::fetchesLiveObservations()
         QVERIFY(item.value(QStringLiteral("url")).toUrl().host() ==
                 QStringLiteral("inaturalist-open-data.s3.amazonaws.com"));
         QCOMPARE(item.value(QStringLiteral("licenseCode")).toString(), QStringLiteral("cc0"));
+        QVERIFY(!item.contains(QStringLiteral("placeIds")));
+        for (const QString &field : {QStringLiteral("city"),
+                                     QStringLiteral("region"),
+                                     QStringLiteral("country")}) {
+            for (const QChar character : item.value(field).toString()) {
+                if (character.isLetter()) {
+                    const QString failure = QStringLiteral("%1=%2 contains U+%3 (script %4)")
+                        .arg(field,
+                             item.value(field).toString(),
+                             QString::number(character.unicode(), 16).toUpper(),
+                             QString::number(character.script()));
+                    const QChar::Script script = character.script();
+                    QVERIFY2(script == QChar::Script_Latin ||
+                                 script == QChar::Script_Common ||
+                                 script == QChar::Script_Inherited,
+                             qPrintable(failure));
+                }
+            }
+        }
     }
 }
 

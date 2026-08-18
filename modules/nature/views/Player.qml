@@ -34,7 +34,7 @@ FocusScope {
             parts.push(item.region)
         if (item.country)
             parts.push(item.country)
-        return parts.length > 0 ? parts.join("  /  ") : "LOCATION WITHHELD"
+        return parts.length > 0 ? parts.join(", ") : "LOCATION WITHHELD"
     }
 
     function cacheLabel() {

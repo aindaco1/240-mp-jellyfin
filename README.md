@@ -92,7 +92,7 @@ Not yet implemented: music libraries and explicit watched/unwatched controls fro
 
 - Up to 100 recent research-grade, non-captive iNaturalist observations per refresh.
 - One CC0 photo per observation, hosted by iNaturalist's HTTPS open-data service. A live policy check still yields the full 100-observation rotation without requiring an attribution line over the image.
-- A shuffled, non-repeating montage with only the common name, scientific species name, and normalized city/state-or-province/country visible in a compact overlay.
+- A shuffled, non-repeating montage with only the common name, scientific species name, and an English-preferred `City, State/Province, Country` line visible in a compact overlay. Non-Latin locality names fall back to offline Latin transliteration when iNaturalist has no English place record.
 - Keyboard controls for next, pause, refresh, and opening the current source observation.
 - A one-hour metadata-only cache that displays saved observations immediately, refreshes stale data in the background, and leaves saved data visible when the network is unavailable. Image files are not persisted.
 

@@ -63,7 +63,7 @@ Manual checks for media changes:
 - Confirm Local browsing, track probing, sidecar subtitle discovery, and playback.
 - Confirm Loop media directory display, long filename selectors, separate audio, shuffle/auto-launch, and looping playback.
 - Confirm Tumblr URL loading, favorites persistence/editing, shuffled non-repeating still/GIF playback, pause/resume, and 90s-style transitions.
-- Confirm Nature cold load, cached and stale-cache load, next/pause/refresh/source controls, compact name/species/location presentation, city/state-or-province/country normalization, non-repeating playback, and offline fallback.
+- Confirm Nature cold load, cached and stale-cache load, next/pause/refresh/source controls, compact name/species/location presentation, comma-separated `City, State/Province, Country` formatting, English place resolution, non-repeating playback, and offline fallback.
 - Confirm app settings persist after restart.
 - For packaging changes, run `cmake --install` into a temporary prefix and verify bundled `mpv`, `ffmpeg`, `ffprobe`, `yt-dlp`, and Deno launch with a stripped `PATH`.
 

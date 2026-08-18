@@ -1,9 +1,12 @@
 #include "NatureBackend.h"
 
+#include <CoreFoundation/CoreFoundation.h>
+
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QHash>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -20,8 +23,10 @@
 
 namespace {
 
-constexpr int kCacheSchemaVersion = 2;
+constexpr int kCacheSchemaVersion = 3;
 constexpr int kMaximumObservations = 100;
+constexpr int kMaximumPlaceIds = 512;
+constexpr int kMaximumPlaceIdsPerObservation = 64;
 constexpr qint64 kMaximumPayloadBytes = 16 * 1024 * 1024;
 constexpr qint64 kMaximumCacheBytes = 2 * 1024 * 1024;
 constexpr qint64 kFreshCacheSeconds = 60 * 60;
@@ -40,6 +45,45 @@ QString limited(QString value, int maximumLength)
     if (value.size() > maximumLength)
         value = value.left(maximumLength - 1) + QChar(0x2026);
     return value;
+}
+
+QString englishFriendlyPlaceName(QString value)
+{
+    value = limited(value, 120);
+    bool hasNonLatinLetters = false;
+    for (const QChar character : value) {
+        const QChar::Script script = character.script();
+        if (character.isLetter() && script != QChar::Script_Latin &&
+            script != QChar::Script_Common && script != QChar::Script_Inherited) {
+            hasNonLatinLetters = true;
+            break;
+        }
+    }
+    if (!hasNonLatinLetters)
+        return value;
+
+    CFMutableStringRef transformed = CFStringCreateMutable(kCFAllocatorDefault, 0);
+    if (!transformed)
+        return value;
+    CFStringAppendCharacters(
+        transformed,
+        reinterpret_cast<const UniChar *>(value.utf16()),
+        value.size());
+    const Boolean didTransform = CFStringTransform(
+        transformed, nullptr, kCFStringTransformToLatin, false);
+    if (!didTransform) {
+        CFRelease(transformed);
+        return value;
+    }
+
+    const CFIndex length = CFStringGetLength(transformed);
+    QString result(static_cast<qsizetype>(length), QChar());
+    CFStringGetCharacters(
+        transformed,
+        CFRangeMake(0, length),
+        reinterpret_cast<UniChar *>(result.data()));
+    CFRelease(transformed);
+    return limited(result, 120);
 }
 
 QString normalizedCountry(QString country)
@@ -142,7 +186,15 @@ void NatureBackend::beginRefresh(bool hasCachedObservations)
 
     emit refreshStarted(hasCachedObservations);
 
-    QNetworkRequest request(requestUrl());
+    QNetworkReply *reply = getJson(requestUrl());
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        handleReply(reply);
+    });
+}
+
+QNetworkReply *NatureBackend::getJson(const QUrl &url)
+{
+    QNetworkRequest request(url);
     request.setRawHeader("Accept", "application/json");
     request.setRawHeader(
         "User-Agent",
@@ -170,9 +222,7 @@ void NatureBackend::beginRefresh(bool hasCachedObservations)
             reply->abort();
         }
     });
-    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
-        handleReply(reply);
-    });
+    return reply;
 }
 
 void NatureBackend::handleReply(QNetworkReply *reply)
@@ -220,12 +270,175 @@ void NatureBackend::handleReply(QNetworkReply *reply)
         return;
     }
 
+    beginPlaceResolution(observations);
+}
+
+QUrl NatureBackend::placesRequestUrl(const QList<qint64> &placeIds) const
+{
+    if (placeIds.isEmpty())
+        return {};
+
+    QStringList encodedIds;
+    encodedIds.reserve(placeIds.size());
+    for (const qint64 placeId : placeIds)
+        encodedIds.append(QString::number(placeId));
+
+    QUrl url = m_apiEndpoint;
+    QString path = url.path();
+    const qsizetype observationsSegment = path.indexOf(QStringLiteral("/observations"));
+    if (observationsSegment >= 0)
+        path.truncate(observationsSegment);
+    else
+        path = QStringLiteral("/v1");
+    url.setPath(path + QStringLiteral("/places/") + encodedIds.join(QLatin1Char(',')));
+
+    QUrlQuery query;
+    query.addQueryItem(QStringLiteral("admin_level"), QStringLiteral("0,10,30"));
+    query.addQueryItem(QStringLiteral("locale"), QStringLiteral("en"));
+    url.setQuery(query);
+    return url;
+}
+
+void NatureBackend::beginPlaceResolution(const QVariantList &observations)
+{
+    QList<qint64> placeIds;
+    QSet<qint64> seen;
+    for (const QVariant &value : observations) {
+        const QVariantList itemPlaceIds = value.toMap().value(QStringLiteral("placeIds")).toList();
+        for (const QVariant &placeValue : itemPlaceIds) {
+            const qint64 placeId = placeValue.toLongLong();
+            if (placeId <= 0 || seen.contains(placeId))
+                continue;
+            seen.insert(placeId);
+            placeIds.append(placeId);
+            if (placeIds.size() >= kMaximumPlaceIds)
+                break;
+        }
+        if (placeIds.size() >= kMaximumPlaceIds)
+            break;
+    }
+
+    if (placeIds.isEmpty()) {
+        finishRefresh(observations);
+        return;
+    }
+
+    m_pendingObservations = observations;
+    QNetworkReply *reply = getJson(placesRequestUrl(placeIds));
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        handlePlacesReply(reply);
+    });
+}
+
+void NatureBackend::handlePlacesReply(QNetworkReply *reply)
+{
+    if (m_activeReply == reply)
+        m_activeReply.clear();
+
+    const int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    const bool payloadTooLarge = reply->property("naturePayloadTooLarge").toBool();
+    const QNetworkReply::NetworkError networkError = reply->error();
+    const QByteArray payload = payloadTooLarge ? QByteArray{} : reply->readAll();
+    const QString networkErrorText = reply->errorString();
+    reply->deleteLater();
+
+    QVariantList observations = m_pendingObservations;
+    m_pendingObservations.clear();
+    if (payloadTooLarge || payload.size() > kMaximumPayloadBytes) {
+        qWarning("[Nature] Rejected oversized Places API response; using location fallback");
+    } else if (networkError != QNetworkReply::NoError) {
+        qWarning("[Nature] Places API request failed (HTTP %d): %s; using location fallback",
+                 statusCode, qPrintable(networkErrorText));
+    } else {
+        observations = observationsWithEnglishPlaces(observations, payload);
+    }
+    finishRefresh(observations);
+}
+
+void NatureBackend::finishRefresh(QVariantList observations)
+{
+    for (QVariant &value : observations) {
+        QVariantMap item = value.toMap();
+        item.remove(QStringLiteral("placeIds"));
+        item[QStringLiteral("city")] = englishFriendlyPlaceName(
+            item.value(QStringLiteral("city")).toString());
+        item[QStringLiteral("region")] = englishFriendlyPlaceName(
+            item.value(QStringLiteral("region")).toString());
+        item[QStringLiteral("country")] = englishFriendlyPlaceName(
+            item.value(QStringLiteral("country")).toString());
+        value = item;
+    }
+
     const QDateTime fetchedAt = QDateTime::currentDateTimeUtc();
     if (!writeCache(observations, fetchedAt))
         qWarning("[Nature] Could not update the observations cache");
 
     m_lastObservations = observations;
     emit observationsLoaded(observations, false, false);
+}
+
+QVariantList NatureBackend::observationsWithEnglishPlaces(
+    const QVariantList &observations,
+    const QByteArray &payload) const
+{
+    QJsonParseError parseError;
+    const QJsonDocument document = QJsonDocument::fromJson(payload, &parseError);
+    if (parseError.error != QJsonParseError::NoError || !document.isObject()) {
+        qWarning("[Nature] Ignored unreadable Places API response");
+        return observations;
+    }
+
+    QHash<qint64, QJsonObject> places;
+    const QJsonArray results = document.object().value(QStringLiteral("results")).toArray();
+    for (const QJsonValue &value : results) {
+        if (!value.isObject())
+            continue;
+        const QJsonObject place = value.toObject();
+        const qint64 placeId = place.value(QStringLiteral("id")).toVariant().toLongLong();
+        const int adminLevel = place.value(QStringLiteral("admin_level")).toInt(999);
+        const QString name = limited(place.value(QStringLiteral("name")).toString(), 120);
+        if (placeId > 0 && !name.isEmpty() &&
+            (adminLevel == 0 || adminLevel == 10 || adminLevel == 30)) {
+            places.insert(placeId, place);
+        }
+    }
+
+    QVariantList resolved;
+    resolved.reserve(observations.size());
+    for (const QVariant &value : observations) {
+        QVariantMap item = value.toMap();
+        QString city;
+        QString region;
+        QString country;
+        const QVariantList itemPlaceIds = item.value(QStringLiteral("placeIds")).toList();
+        for (const QVariant &placeValue : itemPlaceIds) {
+            const QJsonObject place = places.value(placeValue.toLongLong());
+            if (place.isEmpty())
+                continue;
+            const int adminLevel = place.value(QStringLiteral("admin_level")).toInt(999);
+            const QString name = limited(place.value(QStringLiteral("name")).toString(), 120);
+            if (adminLevel == 0 && country.isEmpty())
+                country = normalizedCountry(name);
+            else if (adminLevel == 10 && region.isEmpty())
+                region = name;
+            else if (adminLevel == 30 && city.isEmpty())
+                city = name;
+        }
+        if (!city.isEmpty())
+            item[QStringLiteral("city")] = city;
+        if (!region.isEmpty())
+            item[QStringLiteral("region")] = region;
+        if (!country.isEmpty())
+            item[QStringLiteral("country")] = country;
+        item[QStringLiteral("city")] = englishFriendlyPlaceName(
+            item.value(QStringLiteral("city")).toString());
+        item[QStringLiteral("region")] = englishFriendlyPlaceName(
+            item.value(QStringLiteral("region")).toString());
+        item[QStringLiteral("country")] = englishFriendlyPlaceName(
+            item.value(QStringLiteral("country")).toString());
+        resolved.append(item);
+    }
+    return resolved;
 }
 
 QVariantList NatureBackend::observationsFromPayload(const QByteArray &payload, QString *error) const
@@ -314,6 +527,15 @@ QVariantMap NatureBackend::itemFromObservation(const QJsonObject &observation) c
                          : scientificName;
     const QVariantMap location = locationFromPlaceGuess(
         observation.value(QStringLiteral("place_guess")).toString());
+    QVariantList placeIds;
+    const QJsonArray storedPlaceIds = observation.value(QStringLiteral("place_ids")).toArray();
+    for (const QJsonValue &placeValue : storedPlaceIds) {
+        const qint64 placeId = placeValue.toVariant().toLongLong();
+        if (placeId > 0 && !placeIds.contains(placeId))
+            placeIds.append(placeId);
+        if (placeIds.size() >= kMaximumPlaceIdsPerObservation)
+            break;
+    }
 
     QVariantMap item;
     item[QStringLiteral("id")] = observationId;
@@ -326,6 +548,7 @@ QVariantMap NatureBackend::itemFromObservation(const QJsonObject &observation) c
     item[QStringLiteral("city")] = location.value(QStringLiteral("city"));
     item[QStringLiteral("region")] = location.value(QStringLiteral("region"));
     item[QStringLiteral("country")] = location.value(QStringLiteral("country"));
+    item[QStringLiteral("placeIds")] = placeIds;
     item[QStringLiteral("licenseCode")] = selectedLicense;
     item[QStringLiteral("observationUrl")] = QStringLiteral(
         "https://www.inaturalist.org/observations/%1").arg(observationId);
@@ -419,12 +642,12 @@ QVariantMap NatureBackend::validatedCachedItem(const QJsonObject &object) const
     item[QStringLiteral("animated")] = false;
     item[QStringLiteral("title")] = title;
     item[QStringLiteral("scientificName")] = scientificName;
-    item[QStringLiteral("city")] = limited(
-        object.value(QStringLiteral("city")).toString(), 120);
-    item[QStringLiteral("region")] = limited(
-        object.value(QStringLiteral("region")).toString(), 120);
-    item[QStringLiteral("country")] = normalizedCountry(
-        object.value(QStringLiteral("country")).toString());
+    item[QStringLiteral("city")] = englishFriendlyPlaceName(
+        object.value(QStringLiteral("city")).toString());
+    item[QStringLiteral("region")] = englishFriendlyPlaceName(
+        object.value(QStringLiteral("region")).toString());
+    item[QStringLiteral("country")] = englishFriendlyPlaceName(normalizedCountry(
+        object.value(QStringLiteral("country")).toString()));
     item[QStringLiteral("licenseCode")] = licenseCode;
     item[QStringLiteral("observationUrl")] = QStringLiteral(
         "https://www.inaturalist.org/observations/%1").arg(observationId);
@@ -490,6 +713,14 @@ bool NatureBackend::writeCache(const QVariantList &observations,
         return false;
     }
 
+    QVariantList cacheObservations;
+    cacheObservations.reserve(observations.size());
+    for (const QVariant &value : observations) {
+        QVariantMap item = value.toMap();
+        item.remove(QStringLiteral("placeIds"));
+        cacheObservations.append(item);
+    }
+
     QJsonObject queryPolicy;
     queryPolicy[QStringLiteral("count")] = kMaximumObservations;
     queryPolicy[QStringLiteral("qualityGrade")] = QStringLiteral("research");
@@ -500,7 +731,7 @@ bool NatureBackend::writeCache(const QVariantList &observations,
     root[QStringLiteral("schemaVersion")] = kCacheSchemaVersion;
     root[QStringLiteral("fetchedAt")] = fetchedAt.toUTC().toString(Qt::ISODate);
     root[QStringLiteral("queryPolicy")] = queryPolicy;
-    root[QStringLiteral("observations")] = QJsonArray::fromVariantList(observations);
+    root[QStringLiteral("observations")] = QJsonArray::fromVariantList(cacheObservations);
     const QByteArray payload = QJsonDocument(root).toJson(QJsonDocument::Compact);
     if (payload.size() > kMaximumCacheBytes)
         return false;
