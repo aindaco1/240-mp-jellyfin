@@ -1,6 +1,6 @@
 # Contributing to 240-mp-jellyfin
 
-240-mp-jellyfin is a focused macOS Apple Silicon fork of 240-MP. The goal is to keep the retro CRT-style media shell, keep Local, Loop, Retro, Tumblr, Nature, and Karaoke user-facing, and make Jellyfin the primary server-backed integration.
+240-mp-jellyfin is a focused macOS Apple Silicon fork of 240-MP. The goal is to keep the retro CRT-style media shell, keep Local, Retro, Tumblr, Nature, and Karaoke user-facing, and make Jellyfin the primary server-backed integration. Local owns the former Loop behavior.
 
 ## Getting Started
 
@@ -20,7 +20,7 @@
 ## Current Module Direction
 
 - `jellyfin` is the primary server module.
-- `karaoke` (Karaoke), `retro_tv` (Retro), `tumblr_screensaver` (Tumblr), `nature` (Nature), `local_files` (Local), and `ambient_mode` (Loop) stay user-facing.
+- `karaoke` (Karaoke), `retro_tv` (Retro), `tumblr_screensaver` (Tumblr), `nature` (Nature), and `local_files` (Local) stay user-facing.
 - `plex` remains hidden as a reference until Jellyfin has enough parity to remove it.
 - Jellyfin supports movies and full TV browsing/playback, including negotiated direct play/transcoding, progress reporting, next-episode autoplay, remembered track languages, and capability-gated segment skipping.
 
@@ -49,7 +49,7 @@ Before opening a PR, run the checks that apply:
 ```bash
 cmake --build build
 ctest --test-dir build --output-on-failure
-qmllint -I views Main.qml views/*.qml views/Components/*.qml modules/jellyfin/views/*.qml modules/karaoke/views/*.qml modules/retro_tv/views/*.qml modules/local_files/views/*.qml modules/ambient_mode/views/*.qml modules/tumblr_screensaver/views/*.qml modules/nature/views/*.qml
+qmllint -I views Main.qml views/*.qml views/Components/*.qml modules/jellyfin/views/*.qml modules/karaoke/views/*.qml modules/retro_tv/views/*.qml modules/local_files/views/*.qml modules/tumblr_screensaver/views/*.qml modules/nature/views/*.qml
 git diff --check
 ```
 
@@ -60,8 +60,7 @@ Manual checks for media changes:
 - Confirm Jellyfin login, Continue Watching/Up Next, movie and TV library traversal, filtering, detail loading, track selection, direct playback, transcode fallback, progress reporting, and next-episode behavior.
 - Confirm Retro feed loading, channel surfing, filtering, static transitions, and mpv playback.
 - Confirm Karaoke automatic/manual catalog refresh, live filtering, duplicate adds, persistence, reorder/move mode, clear confirmation, external-display playback, live queue edits, completed removal, and failed retention.
-- Confirm Local browsing, track probing, sidecar subtitle discovery, and playback.
-- Confirm Loop media directory display, long filename selectors, separate audio, shuffle/auto-launch, and looping playback.
+- Confirm Local browsing, Play Now, track probing, sidecar subtitles, queue/soundtrack add, duplicate persistence, reorder/remove/clear, playlist expansion, Repeat Off/Queue/One, shuffle, resume, failed retention, configurable root, separate audio recovery, and saved-queue auto-launch.
 - Confirm Tumblr URL loading, favorites persistence/editing, shuffled non-repeating still/GIF playback, pause/resume, and 90s-style transitions.
 - Confirm Nature cold load, cached and stale-cache load, next/pause/refresh/source controls, compact name/species/location presentation, comma-separated `City, State/Province, Country` formatting, English place resolution, non-repeating playback, and offline fallback.
 - Confirm app settings persist after restart.

@@ -19,13 +19,15 @@ FocusScope {
     property bool   overlayVisible:      false
     property int    choiceIndex:         0
     property var    choices:             []
-    property bool   loopOn:              false
+    property string repeatMode:          "off"
     property string shuffleSetting:      "ask"
     property string resumeSetting:       "ask"
     property string subtitleMode:        "forced"
     property var    subtitleLanguages:   []
     property int    imageDurationSeconds: 5
     property bool   imageContent:        false
+    property var    soundtrackPaths:     []
+    property bool   hasSoundtrack:       soundtrackPaths.length > 0 && !localFilesBackend.isAudio(filePath)
 
     property int automaticSubtitleTrack: subtitleMode === "on" ? 0
                                             : subtitleMode === "forced" ? -1 : -2
@@ -44,11 +46,14 @@ FocusScope {
             subtitleTrack: subtitleExplicit ? subtitleTrack : automaticSubtitleTrack,
             subtitleFiles: subtitleExplicit ? subtitleFiles : [],
             subtitleLanguages: subtitleLanguages,
-            loop: loopOn,
+            repeatMode: repeatMode,
             playlistStart: playlistStart,
             shuffle: useShuffle || false,
-            imageDurationSeconds: imageDurationSeconds
+            imageDurationSeconds: imageDurationSeconds,
+            muteAudio: hasSoundtrack
         })
+        if (hasSoundtrack)
+            localFilesBackend.startAudio(soundtrackPaths, false)
     }
 
     Keys.onPressed: function(event) {
@@ -115,6 +120,7 @@ FocusScope {
         }
 
         function onPlaybackEnded(finalPositionMs, finalDurationMs, reason) {
+            localFilesBackend.stopAudio()
             var pos   = lastKnownPositionMs  || finalPositionMs
             var dur   = lastKnownDurationMs  || finalDurationMs
             var plPos = lastKnownPlaylistPos
@@ -136,7 +142,10 @@ FocusScope {
 
     Component.onCompleted: {
         if (filePath === "") return
-        loopOn        = !!appCore.get_setting(moduleRoot.moduleId, "loop_playback")
+        repeatMode = appCore.get_setting(moduleRoot.moduleId, "repeat_mode") ||
+                     (appCore.get_setting(moduleRoot.moduleId, "loop_playback") ? "queue" : "off")
+        if (["off", "queue", "one"].indexOf(repeatMode) < 0)
+            repeatMode = "off"
         var shuffleRaw = appCore.get_setting(moduleRoot.moduleId, "shuffle_playback")
         shuffleSetting = typeof shuffleRaw === "boolean"
                        ? (shuffleRaw ? "yes" : "no") : (shuffleRaw || "ask")
@@ -148,6 +157,9 @@ FocusScope {
         subtitleLanguages = language === "-" ? [] : [language]
         var duration = parseInt(appCore.get_setting(moduleRoot.moduleId, "image_duration") || "5")
         imageDurationSeconds = isNaN(duration) ? 5 : duration
+        var soundtrackShuffleRaw = appCore.get_setting(moduleRoot.moduleId, "soundtrack_shuffle")
+        var soundtrackShuffle = soundtrackShuffleRaw === true || soundtrackShuffleRaw === "ON"
+        soundtrackPaths = localFilesBackend.soundtrackPaths(soundtrackShuffle)
         imageContent = isImage(filePath) ||
                        (isPlaylist(filePath) && localFilesBackend.playlistContainsImages(filePath))
 

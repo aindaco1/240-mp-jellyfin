@@ -20,7 +20,7 @@ private slots:
     void listSettingsRoundTrip();
     void qmlListSettingsRoundTrip();
     void nonAuthBackendReturnsNoAuthState();
-    void discoversNatureInExpectedOrder();
+    void discoversReleaseModulesInExpectedOrder();
 };
 
 void AppCoreTest::dottedSettingsRoundTrip()
@@ -93,7 +93,7 @@ void AppCoreTest::nonAuthBackendReturnsNoAuthState()
     QCOMPARE(core.get_module_auth_state(QStringLiteral("com.example.module")), QString());
 }
 
-void AppCoreTest::discoversNatureInExpectedOrder()
+void AppCoreTest::discoversReleaseModulesInExpectedOrder()
 {
     QTemporaryDir data;
     QVERIFY(data.isValid());
@@ -108,8 +108,7 @@ void AppCoreTest::discoversNatureInExpectedOrder()
         names.append(module.toMap().value(QStringLiteral("name")).toString());
     QCOMPARE(names, QStringList({QStringLiteral("Jellyfin"), QStringLiteral("Karaoke"),
                                  QStringLiteral("Retro"), QStringLiteral("Tumblr"),
-                                 QStringLiteral("Nature"), QStringLiteral("Local"),
-                                 QStringLiteral("Loop")}));
+                                 QStringLiteral("Nature"), QStringLiteral("Local")}));
 
     const QVariantMap nature = core.get_module_info(QStringLiteral("com.240mp.nature")).toMap();
     QCOMPARE(nature.value(QStringLiteral("name")).toString(), QStringLiteral("Nature"));

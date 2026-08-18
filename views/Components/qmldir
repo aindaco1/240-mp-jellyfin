@@ -3,6 +3,7 @@ AppBar AppBar.qml
 ImageMontage ImageMontage.qml
 MontageMedia MontageMedia.qml
 PlaybackControlPanel PlaybackControlPanel.qml
+PlaybackSelectorRow PlaybackSelectorRow.qml
 SelectableMarqueeRow SelectableMarqueeRow.qml
 PlaybackTransitionOverlay PlaybackTransitionOverlay.qml
 MediaOutputLease MediaOutputLease.qml

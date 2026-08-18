@@ -25,7 +25,7 @@ The guiding idea: **browse structured content, then hand off to the right tool f
     AppCore.h / AppCore.cpp         # app shell: module registry, config r/w, settings routing
     modules/                        # per-module C++ backends
       local_files/
-        LocalFilesBackend.h/.cpp
+        LocalFilesBackend.h/.cpp   # root-contained browsing, queues, resume, soundtrack process
       plex/
         PlexBackend.h/.cpp          # hidden reference backend retained until Jellyfin parity
       jellyfin/
@@ -64,7 +64,7 @@ The guiding idea: **browse structured content, then hand off to the right tool f
   CMakeLists.txt
 ```
 
-The user-facing modules appear as Jellyfin, Karaoke, Retro, Tumblr, Nature, Local, and Loop. Their source IDs are `jellyfin`, `karaoke`, `retro_tv`, `tumblr_screensaver`, `nature`, `local_files`, and `ambient_mode`. `plex` remains installed and registerable, but its manifest is marked `hidden: true` while Jellyfin moves toward parity.
+The user-facing modules appear as Jellyfin, Karaoke, Retro, Tumblr, Nature, and Local. Their source IDs are `jellyfin`, `karaoke`, `retro_tv`, `tumblr_screensaver`, `nature`, and `local_files`. Local now owns the former Loop behavior rather than maintaining a second module and backend. `plex` remains installed and registerable, but its manifest is marked `hidden: true` while Jellyfin moves toward parity.
 
 ## Anatomy of a Module
 
@@ -194,11 +194,11 @@ The current mpv implementation is a good reference implementation of the "browse
 
 ### How the hand-off works
 
-1. **Launch** — `loadAndPlayWithOptions(url, options)` starts mpv as a `QProcess`; the legacy positional wrapper delegates to it. Named options cover resume, playlists, looping/shuffle, audio/subtitle selection, sidecars, images, filters, input bindings, authenticated headers, and module-owned extra mpv arguments without duplicating launch logic across modules. `resolveDisplaySelection` assigns separate controller and media roles from the saved app settings: automatic keeps the controller on the primary display and chooses the first other display for media, while explicit indices can target either role or make media share the controller display. `Main.qml` owns the matching second-screen QML output layer for pure-QML media and mpv-adjacent overlays. `HelperResolver` resolves packaged helpers first, then development overrides and `PATH`, and builds a per-process `PATH`; the app never mutates its global environment or links libmpv.
+1. **Launch** — `loadAndPlayWithOptions(url, options)` starts mpv as a `QProcess`; the legacy positional wrapper delegates to it. Named options cover resume, playlists, Repeat Off/Queue/One, shuffle, audio/subtitle selection, sidecars, images, filters, input bindings, authenticated headers, and module-owned extra mpv arguments without duplicating launch logic across modules. `resolveDisplaySelection` assigns separate controller and media roles from the saved app settings: automatic keeps the controller on the primary display and chooses the first other display for media, while explicit indices can target either role or make media share the controller display. `Main.qml` owns the matching second-screen QML output layer for pure-QML media and mpv-adjacent overlays. `HelperResolver` resolves packaged helpers first, then development overrides and `PATH`, and builds a per-process `PATH`; the app never mutates its global environment or links libmpv.
 2. **Authenticated HTTP playback** — Jellyfin headers are written to a temporary owner-only mpv include file and passed with `--include=<file>`, so tokens are not exposed as normal command-line header arguments. Jellyfin stream URLs avoid `api_key` query tokens.
-3. **Control channel** — mpv is started with `--input-ipc-server=<socket>` (a Unix domain socket at `/tmp/240-mp-jellyfin-mpv.sock`). `MpvController` connects to it with a `QLocalSocket` and sends JSON commands via `sendCommand(QJsonArray)`. Seeking, key input, video filters, messages, and playlist append/remove/move/clear/play/replace operations go over this channel. mpv client messages using the `240mp-key` prefix are bridged back to QML through `mpvKeyPressed`; `file-loaded` is surfaced separately so overlays can reveal only after the replacement video is ready.
+3. **Control channel** — mpv is started with `--input-ipc-server=<socket>` (a Unix domain socket at `/tmp/240-mp-jellyfin-mpv.sock`). `MpvController` connects to it with a `QLocalSocket` and sends JSON commands via `sendCommand(QJsonArray)`. Seeking, key input, video filters, messages, narrow per-file track selection, and playlist append/remove/move/clear/play/replace operations go over this channel. mpv client messages using the `240mp-key` prefix are bridged back to QML through `mpvKeyPressed`; `file-loaded` is surfaced separately so Local can apply each queued entry's track choices and overlays can reveal only after replacement video is ready.
 4. **State back to QML** — `MpvController` issues `observe_property` for `time-pos`, `duration`, and `playlist-pos`, and re-publishes them as `Q_PROPERTY`s + the `positionChanged` / `durationChanged` / `playlistPosChanged` signals. A watchdog timer logs a warning if no `time-pos` event arrives for about 30 s.
-5. **Exit and item outcome** — mpv `end-file` events are surfaced as `playbackItemEnded(playlistIndex, reason, error)`. Process completion emits the shared **`playbackEnded(finalPos, finalDur, reason)`** signal with `eof`, `stopped`, or `failed`; compatibility signals remain for hidden/legacy code. Karaoke uses item outcomes to mutate its queue, Local records resume state, and Jellyfin reports the result to the server or retries direct-play failure as a transcode.
+5. **Exit and item outcome** — mpv `end-file` events are surfaced as `playbackItemEnded(playlistIndex, reason, error)`. Process completion emits the shared **`playbackEnded(finalPos, finalDur, reason)`** signal with `eof`, `stopped`, or `failed`; compatibility signals remain for hidden/legacy code. Karaoke removes completed queue entries; Local retains completed entries, marks failures, and records resume state; Jellyfin reports the result to the server or retries direct-play failure as a transcode.
 
 ### Bundled helper policy
 
@@ -206,7 +206,7 @@ The current mpv implementation is a good reference implementation of the "browse
 
 ### Custom OSC (Lua)
 
-The on-screen controls mpv shows during playback are custom Lua scripts in `scripts/` (`mpv-osc.lua` for normal playback, `ambient-osc.lua` for Loop), loaded via mpv's `--script=` flag. Retro uses `mpv-osc.lua` in `retro-tv` mode so `M` opens the mpv controls while arrow keys remain available for channel surfing and clip skipping.
+The on-screen controls mpv shows during playback come from the shared `scripts/mpv-osc.lua`, loaded via mpv's `--script=` flag. Retro uses it in `retro-tv` mode so `M` opens the mpv controls while arrow keys remain available for channel surfing and clip skipping.
 
 ### Adding a different hand-off target
 
@@ -225,7 +225,7 @@ Please review `JellyfinBackend` for the current third-party API integration patt
 - For dynamic settings dropdowns, emit `dynamicOptionsReady(key, [{id, label}])` — auto-connected; `AppCore` re-emits with the module ID prepended.
 - For auth-gated modules, emit `authStateChanged()` on sign-in/out — auto-connected and re-emitted as `moduleAuthStateChanged(moduleId)`.
 - To react to your own settings changing, add a slot `onSettingChanged(moduleId, key, value)` — auto-connected to `moduleSettingChanged`.
-- A backend resolves its own configured paths in its constructor — e.g. `LocalFilesBackend` / `AmbientModeBackend` read `media_directory` from `config.json` (defaulting to `~/Desktop`). `main.cpp` does not touch module paths.
+- A backend resolves its own configured paths in its constructor — e.g. `LocalFilesBackend` reads `media_directory` from `config.json` (defaulting to `~/Desktop`). `main.cpp` does not touch module paths.
 
 ## Jellyfin Module
 
@@ -297,11 +297,25 @@ Nature lives in `modules/nature/` and `src/modules/nature/`.
 - `nature_observations.json` is an atomic, schema-versioned, owner-only metadata cache capped at 100 records and 2 MiB. Cached URLs and licenses are revalidated before reuse. A fresh cache avoids a request; stale data is emitted immediately and refreshed in the background; failed refreshes leave saved observations visible. Image files are never persisted.
 - `Player.qml` uses the same `ImageMontage` and `MontageMedia` path as Tumblr, adding a compact three-line name/species/`City, State/Province, Country` panel and keyboard controls for next, pause, refresh, source observation, and back.
 
+## Local Module
+
+Local lives in `modules/local_files/` and `src/modules/local_files/` and incorporates the former Loop module.
+
+- `Items.qml` is a two-pane file browser and queue editor. The right pane switches between the media and soundtrack queues; both support duplicates, move, remove, and confirmed clear operations.
+- `Detail.qml` preserves Play Now and adds queue actions after track selection. Media playlists expand into video/image entries; soundtrack playlists expand into audio entries.
+- `local_queue.json` stores both queues in one schema-versioned, owner-only atomic file. Entries use UUID identity, are capped at 1,000 per queue, and are revalidated under the active media root when loaded or when that root changes.
+- Playlist import accepts local relative, absolute, or `file:` entries only. Remote schemes, root escapes, cycles, newline-containing paths, excessive nesting, unsupported types, and missing files are rejected before persistence.
+- `preparePlayback()` writes an owner-only `local_queue.m3u8` and returns the exact entry snapshot matching mpv's playlist order. Shuffle keeps the selected item first without mutating the saved queue.
+- Queue completion leaves entries in place. Item errors persist as a visible failed state until a successful retry or manual removal.
+- Repeat Off maps to normal playlist completion, Repeat Queue to `--loop-playlist=inf`, and Repeat One to `--loop-file=inf` through the shared named mpv options path.
+- A non-empty soundtrack queue mutes the main media process and loops through a separate bundled-mpv process. Unexpected soundtrack exits use bounded exponential-backoff recovery; explicit stop cancels recovery.
+- Auto-launch starts only a non-empty saved media queue. The media root remains configurable and defaults to `~/Desktop`; the retired Loop directory is not migrated.
+
 ## Track Selection
 
 Local and Jellyfin both expose audio/subtitle choices before playback.
 
-- Local calls bundled or PATH `ffprobe` through `LocalFilesBackend::probeMediaTracks()`, validates the probed path stays under the configured media root, and adds matching sidecar subtitles from the same directory.
+- Local calls bundled or PATH `ffprobe` through `LocalFilesBackend::probeMediaTracks()`, validates the probed path stays under the configured media root, and adds matching sidecar subtitles from the same directory. Queue entries persist explicit choices, and `QueuePlayer.qml` applies them through the narrow `selectPlaybackTracks()` IPC method whenever the matching file loads.
 - Jellyfin parses `MediaStreams` from item detail responses and maps audio/subtitle choices to mpv `--aid`, `--sid`, and `--sub-file` values.
 - External subtitles are passed as authenticated mpv subtitle URLs when Jellyfin provides `DeliveryUrl`.
 
@@ -504,8 +518,14 @@ User configuration is stored in `config.json` in the app's data directory:
   "modules": {
     "com.240mp.jellyfin": { "enabled": true, "resume_playback": "ask", "video_quality": "direct" },
     "com.240mp.karaoke": { "enabled": true },
-    "com.240mp.local_files": { "enabled": true, "media_directory": "~/Desktop" },
-    "com.240mp.ambient_mode": { "enabled": true, "media_directory": "~/Desktop" },
+    "com.240mp.local_files": {
+      "enabled": true,
+      "media_directory": "~/Desktop",
+      "repeat_mode": "off",
+      "queue_shuffle": false,
+      "soundtrack_shuffle": false,
+      "auto_launch": false
+    },
     "com.240mp.tumblr_screensaver": {
       "enabled": true,
       "tumblr_url": "https://pixelskylines.tumblr.com/",

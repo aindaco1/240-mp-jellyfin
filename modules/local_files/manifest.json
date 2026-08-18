@@ -18,10 +18,32 @@
       "default": "~/Desktop"
     },
     {
-      "key": "loop_playback",
-      "label": "Loop Playback",
+      "key": "repeat_mode",
+      "label": "Repeat Mode",
+      "type": "list_single",
+      "options_source": "dynamic",
+      "options_slot": "get_repeat_mode_options",
+      "default": "off",
+      "description": "Choose whether playback stops, repeats the full queue, or repeats the current item."
+    },
+    {
+      "key": "queue_shuffle",
+      "label": "Shuffle Queue",
       "type": "toggle",
       "default": "OFF"
+    },
+    {
+      "key": "soundtrack_shuffle",
+      "label": "Shuffle Soundtrack",
+      "type": "toggle",
+      "default": "OFF"
+    },
+    {
+      "key": "auto_launch",
+      "label": "Auto-Launch Saved Queue",
+      "type": "toggle",
+      "default": "OFF",
+      "description": "Start the saved media queue when Local opens. An empty queue remains in the browser."
     },
     {
       "key": "shuffle_playback",

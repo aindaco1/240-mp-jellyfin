@@ -10,14 +10,22 @@ All notable changes to 240-mp-jellyfin are documented here.
 
 - Added a keyboard-first Nature module that cycles through up to 100 recent research-grade iNaturalist observations, showing only the common name, scientific species name, and an English-preferred `City, State/Province, Country` line in a compact overlay.
 - Added a schema-versioned, owner-only metadata cache with one-hour freshness, stale-while-refresh behavior, atomic writes, bounded payloads, and an opt-in live iNaturalist integration test.
+- Added persistent duplicate-friendly media and soundtrack queues to Local, with bounded local playlist expansion, reorder/remove/clear controls, Repeat Off/Queue/One, shuffle, optional saved-queue auto-launch, retained completed entries, and visible failed entries.
+- Added per-entry Local audio/subtitle choices, queue resume, and a shared bounded playback selector component.
 
 ### Changed
 
 - Extracted Tumblr's shuffled, non-repeating still/GIF montage into shared `ImageMontage` and `MontageMedia` components, then migrated Tumblr and Nature to the same tested transition and failed-image handling path.
+- Consolidated Loop into Local while preserving its independently looping soundtrack and bounded audio-process recovery; `~/Desktop` remains the default Local media root and can still be changed in Settings.
 
 ### Security
 
 - Nature makes anonymous, bounded API requests, rate-limits refreshes, resolves English place names with one capped iNaturalist Places batch when available, and uses offline transliteration for remaining non-Latin locality names. It accepts only research-grade non-captive observations and independently revalidates every photo as CC0 on iNaturalist's HTTPS open-data host before display or cache reuse. It stores normalized public place components rather than coordinates and never caches image files.
+- Local queue state is schema- and size-bounded, atomically written owner-only, limited to validated paths under the configured media root, and rejects remote playlist entries, newline path injection, cyclic playlists, and excessive nesting.
+
+### Removed
+
+- Removed the standalone Loop module, backend, settings surface, and ambient-only OSC; its maintained behavior now lives in Local without a duplicate Home entry.
 
 ## [1.4.1] - 2026-08-17
 

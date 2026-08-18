@@ -50,7 +50,7 @@ Item {
         Text {
             id: previousArrow
             objectName: "selectorPreviousArrow"
-            text: "◄"
+            text: "\u25C4"
             color: selectorRoot.selected ? selectorRoot.surfaceColor : selectorRoot.tertiaryColor
             font.family: selectorRoot.fontFamily
             horizontalAlignment: Text.AlignHCenter
@@ -66,7 +66,7 @@ Item {
         Text {
             id: nextArrow
             objectName: "selectorNextArrow"
-            text: "►"
+            text: "\u25BA"
             color: selectorRoot.selected ? selectorRoot.surfaceColor : selectorRoot.tertiaryColor
             font.family: selectorRoot.fontFamily
             horizontalAlignment: Text.AlignHCenter

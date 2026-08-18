@@ -76,6 +76,9 @@ On macOS all user configuration is stored at:
   karaoke_catalog.json ← cached public eighteen-source Karaoke catalog (refreshed after 24 hours)
   karaoke_queue.json   ← persistent Karaoke queue
   karaoke_queue.m3u8   ← generated canonical playback URLs
+  local_files_history.json ← Local resume history
+  local_queue.json     ← persistent Local media and soundtrack queues
+  local_queue.m3u8     ← generated root-contained Local playback paths
   nature_observations.json ← cached public iNaturalist metadata (no image files)
 ```
 
@@ -203,7 +206,7 @@ Recommended checks before committing code changes:
 ```bash
 cmake --build build
 ctest --test-dir build --output-on-failure
-qmllint -I views Main.qml views/*.qml views/Components/*.qml modules/jellyfin/views/*.qml modules/karaoke/views/*.qml modules/retro_tv/views/*.qml modules/local_files/views/*.qml modules/ambient_mode/views/*.qml modules/tumblr_screensaver/views/*.qml modules/nature/views/*.qml
+qmllint -I views Main.qml views/*.qml views/Components/*.qml modules/jellyfin/views/*.qml modules/karaoke/views/*.qml modules/retro_tv/views/*.qml modules/local_files/views/*.qml modules/tumblr_screensaver/views/*.qml modules/nature/views/*.qml
 git diff --check
 ```
 

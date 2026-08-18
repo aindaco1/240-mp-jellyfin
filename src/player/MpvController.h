@@ -60,6 +60,10 @@ public:
     Q_INVOKABLE void showText(const QString &text, int durationMs = 4000);
     Q_INVOKABLE void showOsdSkipPrompt();
     Q_INVOKABLE void clearOsdPrompt();
+    // Applies file-specific track choices after a playlist item loads. This is
+    // intentionally narrower than exposing arbitrary mpv commands to QML.
+    Q_INVOKABLE void selectPlaybackTracks(int audioTrack, int subtitleTrack,
+                                          const QStringList &subtitleFiles = {});
     Q_INVOKABLE void appendPlaylistItem(const QString &url);
     Q_INVOKABLE void playPlaylistItem(int index);
     Q_INVOKABLE void replacePlaylistItem(int index, const QString &url);

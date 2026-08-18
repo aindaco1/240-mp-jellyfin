@@ -59,7 +59,6 @@ add_executable(240mp
     src/modules/plex/PlexBackend.cpp
     src/modules/jellyfin/JellyfinBackend.cpp
     src/modules/karaoke/KaraokeBackend.cpp
-    src/modules/ambient_mode/AmbientModeBackend.cpp
     src/modules/tumblr_screensaver/TumblrScreensaverBackend.cpp
     src/modules/nature/NatureBackend.cpp
     src/player/MpvController.cpp
@@ -139,23 +138,14 @@ if(BUILD_TESTING)
     target_link_libraries(karaoke_backend_tests PRIVATE Qt6::Core Qt6::Test)
     add_test(NAME karaoke_backend COMMAND karaoke_backend_tests)
 
-    add_executable(ambient_mode_backend_tests
-        tests/AmbientModeBackendTest.cpp
-        src/modules/ambient_mode/AmbientModeBackend.cpp
-        src/tools/HelperResolver.cpp
+    add_executable(playback_selector_qml_tests
+        tests/PlaybackSelectorQmlTest.cpp
     )
-    target_include_directories(ambient_mode_backend_tests PRIVATE src)
-    target_link_libraries(ambient_mode_backend_tests PRIVATE Qt6::Core Qt6::Test)
-    add_test(NAME ambient_mode_backend COMMAND ambient_mode_backend_tests)
-
-    add_executable(ambient_mode_qml_tests
-        tests/AmbientModeQmlTest.cpp
-    )
-    target_compile_definitions(ambient_mode_qml_tests PRIVATE
+    target_compile_definitions(playback_selector_qml_tests PRIVATE
         TEST_SOURCE_ROOT="${CMAKE_SOURCE_DIR}"
     )
-    target_link_libraries(ambient_mode_qml_tests PRIVATE Qt6::Core Qt6::Gui Qt6::Quick Qt6::Qml Qt6::Test)
-    add_test(NAME ambient_mode_qml COMMAND ambient_mode_qml_tests)
+    target_link_libraries(playback_selector_qml_tests PRIVATE Qt6::Core Qt6::Gui Qt6::Quick Qt6::Qml Qt6::Test)
+    add_test(NAME playback_selector_qml COMMAND playback_selector_qml_tests)
 
     add_executable(media_output_lease_tests
         tests/MediaOutputLeaseTest.cpp
@@ -322,7 +312,6 @@ install(DIRECTORY
     PATTERN ".DS_Store" EXCLUDE)
 
 install(FILES
-    "${CMAKE_SOURCE_DIR}/scripts/ambient-osc.lua"
     "${CMAKE_SOURCE_DIR}/scripts/media-keys.lua"
     "${CMAKE_SOURCE_DIR}/scripts/mpv-osc.lua"
     "${CMAKE_SOURCE_DIR}/scripts/screensaver.lua"
