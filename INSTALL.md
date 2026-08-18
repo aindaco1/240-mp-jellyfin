@@ -6,7 +6,7 @@
 
 - Apple Silicon Mac.
 - macOS current enough to run the Qt 6 app bundle.
-- Network access to your Jellyfin server for Jellyfin playback and to YouTube for Karaoke/Retro playback.
+- Network access to your Jellyfin server for Jellyfin playback, to YouTube for Karaoke/Retro playback, and to iNaturalist for fresh Nature observations. Nature can reuse its saved metadata while offline.
 
 The packaged app bundles `mpv`, `ffmpeg`, `ffprobe`, pinned standalone `yt-dlp`, pinned Deno, and required non-system dynamic libraries. End users do not need to install Homebrew, Python, mpv, FFmpeg, yt-dlp, or a JavaScript runtime.
 
@@ -33,7 +33,7 @@ Manual updating remains supported:
 2. Verify the checksum with `shasum -a 256 -c <downloaded-file>.sha256`.
 3. Open the DMG and drag `240-mp-jellyfin.app` onto its Applications shortcut, replacing the older copy when prompted.
 
-Your settings, Jellyfin authentication, Karaoke catalog cache, and Karaoke queue are kept in `~/Library/Application Support/240-mp-jellyfin/`, so replacing the app bundle does not erase them.
+Your settings, Jellyfin authentication, Karaoke catalog cache and queue, Local queues and resume history, and Nature observation metadata cache are kept in `~/Library/Application Support/240-mp-jellyfin/`, so replacing the app bundle does not erase them.
 
 ## Uninstall
 

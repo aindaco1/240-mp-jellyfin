@@ -4,6 +4,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJSEngine>
+#include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QtTest>
 
@@ -19,6 +20,7 @@ private slots:
     void listSettingsRoundTrip();
     void qmlListSettingsRoundTrip();
     void nonAuthBackendReturnsNoAuthState();
+    void discoversReleaseModulesInExpectedOrder();
 };
 
 void AppCoreTest::dottedSettingsRoundTrip()
@@ -89,6 +91,28 @@ void AppCoreTest::nonAuthBackendReturnsNoAuthState()
     BackendWithoutAuth backend;
     core.registerModule(QStringLiteral("com.example.module"), QString(), &backend, nullptr);
     QCOMPARE(core.get_module_auth_state(QStringLiteral("com.example.module")), QString());
+}
+
+void AppCoreTest::discoversReleaseModulesInExpectedOrder()
+{
+    QTemporaryDir data;
+    QVERIFY(data.isValid());
+    AppCore core(QStringLiteral(TEST_SOURCE_ROOT), data.path());
+    QSignalSpy modulesSpy(&core, &AppCore::modulesLoaded);
+
+    core.scan_for_modules();
+    QCOMPARE(modulesSpy.size(), 1);
+    const QVariantList modules = modulesSpy.constFirst().constFirst().toList();
+    QStringList names;
+    for (const QVariant &module : modules)
+        names.append(module.toMap().value(QStringLiteral("name")).toString());
+    QCOMPARE(names, QStringList({QStringLiteral("Jellyfin"), QStringLiteral("Karaoke"),
+                                 QStringLiteral("Retro"), QStringLiteral("Tumblr"),
+                                 QStringLiteral("Nature"), QStringLiteral("Local")}));
+
+    const QVariantMap nature = core.get_module_info(QStringLiteral("com.240mp.nature")).toMap();
+    QCOMPARE(nature.value(QStringLiteral("name")).toString(), QStringLiteral("Nature"));
+    QVERIFY(nature.value(QStringLiteral("icon")).toUrl().isValid());
 }
 
 QTEST_MAIN(AppCoreTest)

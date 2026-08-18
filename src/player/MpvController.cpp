@@ -264,6 +264,7 @@ void MpvController::loadAndPlayWithOptions(const QString &url, const QVariantMap
     const QStringList subFiles = options.value("subtitleFiles").toStringList();
     const QStringList subLangs = options.value("subtitleLanguages").toStringList();
     const bool loop = options.value("loop").toBool();
+    const QString repeatMode = options.value("repeatMode").toString().trimmed().toLower();
     const int playlistStart = options.contains("playlistStart")
         ? options.value("playlistStart").toInt() : -1;
     const float transcodeOffsetSec = options.value("transcodeOffsetSeconds").toFloat();
@@ -309,8 +310,7 @@ void MpvController::loadAndPlayWithOptions(const QString &url, const QVariantMap
         return;
     }
 
-    const QString oscScriptName = (oscMode == "ambient") ? "ambient-osc.lua" : "mpv-osc.lua";
-    const QString oscScript = m_appRoot + "/scripts/" + oscScriptName;
+    const QString oscScript = m_appRoot + QStringLiteral("/scripts/mpv-osc.lua");
     const bool hasOscScript = QFile::exists(oscScript);
     const QString mediaKeysScript = m_appRoot + "/scripts/media-keys.lua";
 
@@ -380,7 +380,9 @@ void MpvController::loadAndPlayWithOptions(const QString &url, const QVariantMap
     if (screensaverTimeout > 0)
         args << QString("--script-opts-append=screensaver-timeout=%1").arg(screensaverTimeout);
 
-    if (loop)
+    if (repeatMode == QLatin1String("one"))
+        args << QStringLiteral("--loop-file=inf");
+    else if (loop || repeatMode == QLatin1String("queue"))
         args << QStringLiteral("--loop-playlist=inf");
     if (shuffle)
         args << QStringLiteral("--shuffle");
@@ -569,6 +571,25 @@ void MpvController::showOsdSkipPrompt() {
 
 void MpvController::clearOsdPrompt() {
     sendCommand({"script-message", "skip-overlay-state", "0"});
+}
+
+void MpvController::selectPlaybackTracks(int audioTrack, int subtitleTrack,
+                                         const QStringList &subtitleFiles) {
+    sendCommand({"set_property", "aid", audioTrack > 0 ? QJsonValue(audioTrack)
+                                                        : QJsonValue(QStringLiteral("auto"))});
+    for (int index = 0; index < subtitleFiles.size(); ++index) {
+        const QString path = subtitleFiles.at(index).trimmed();
+        if (!path.isEmpty())
+            sendCommand({"sub-add", path, index == 0 ? "select" : "auto"});
+    }
+    if (!subtitleFiles.isEmpty())
+        return;
+    if (subtitleTrack > 0)
+        sendCommand({"set_property", "sid", subtitleTrack});
+    else if (subtitleTrack < -1)
+        sendCommand({"set_property", "sid", "no"});
+    else
+        sendCommand({"set_property", "sid", "auto"});
 }
 
 void MpvController::appendPlaylistItem(const QString &url) {

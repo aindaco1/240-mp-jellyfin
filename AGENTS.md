@@ -1,6 +1,6 @@
 # 240-mp-jellyfin Development Guidelines
 
-240-mp-jellyfin is a macOS Apple Silicon fork of 240-MP. It keeps the retro VHS/CRT-style Qt 6 + QML shell, keeps Local, Loop, Retro, and Tumblr, hides Plex, adds Jellyfin as the primary server-backed module, and adds a Funbox-backed Karaoke queue.
+240-mp-jellyfin is a macOS Apple Silicon fork of 240-MP. It keeps the retro VHS/CRT-style Qt 6 + QML shell, keeps Local, Retro, Tumblr, and Nature, hides Plex, adds Jellyfin as the primary server-backed module, and adds a Funbox-backed Karaoke queue. Local incorporates the former Loop behavior.
 
 **Playback engine**: the app launches `mpv` as a subprocess through `MpvController`. Local track probing uses `ffprobe`. CMake downloads pinned, checksum-verified standalone `yt-dlp` and Deno helpers for YouTube extraction. Packaged macOS apps bundle all four helpers; end users do not need system copies.
 
@@ -40,7 +40,7 @@ For packaging, CI, and config paths, see **[BUILDING.md](BUILDING.md)** and **[I
 ## Key Facts
 
 - CMake intentionally fails on non-macOS hosts.
-- User-facing modules are `jellyfin`, `karaoke`, `retro_tv`, `tumblr_screensaver`, `local_files`, and `ambient_mode`, displayed in that order as Jellyfin, Karaoke, Retro, Tumblr, Local, and Loop.
+- User-facing modules are `jellyfin`, `karaoke`, `retro_tv`, `tumblr_screensaver`, `nature`, and `local_files`, displayed in that order as Jellyfin, Karaoke, Retro, Tumblr, Nature, and Local.
 - Plex remains in the source tree but is hidden by `modules/plex/manifest.json`.
 - Modules are discovered from `modules/*/manifest.json`; a backend module adds one `registerModule(...)` call in `src/main.cpp`.
 - `registerModule` wires optional backend signals/slots by introspection: `dynamicOptionsReady`, `authStateChanged`, and `onSettingChanged`.
@@ -50,7 +50,9 @@ For packaging, CI, and config paths, see **[BUILDING.md](BUILDING.md)** and **[I
 - Controller and media display roles are selected independently; automatic keeps the controller on the primary screen and media on the first other screen, while explicit changes take effect after restart.
 - Jellyfin auth is `jellyfin_auth.json`; passwords are never persisted.
 - Karaoke stores a non-secret 24-hour catalog cache, persistent queue, and generated playback playlist under the same app data directory.
-- Tumblr stores its current URL and normalized favorites list in `config.json`; GIFs use the shared `TumblrMedia.qml` static/animated renderer.
+- Local stores owner-only resume history plus persistent media/soundtrack queues. Queue paths must remain under its configurable media root (default `~/Desktop`); Loop's retired directory is not migrated.
+- Tumblr stores its current URL and normalized favorites list in `config.json`; Tumblr and Nature share the tested `ImageMontage.qml` / `MontageMedia.qml` still/GIF transition path.
+- Nature anonymously fetches up to 100 research-grade iNaturalist observations, uses one capped Places batch to prefer English public place names, accepts only independently validated CC0 photos from the HTTPS open-data host, exposes only name/species and comma-separated `City, State/Province, Country` in its compact overlay, and keeps an owner-only metadata cache without image files or place IDs.
 - Signed releases update through `UpdateManager`; never weaken its SHA-256, notarization, Developer ID team, bundle ID, version, or arm64 checks.
 - Jellyfin TV playback negotiates PlaybackInfo, reports session progress, can retry through transcoding, and optionally uses server Media Segments for intro/outro skipping.
 - Do not log tokens, passwords, full auth headers, or token-bearing URLs.

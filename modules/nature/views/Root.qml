@@ -6,14 +6,9 @@ FocusScope {
     signal goBack()
 
     property var navParams: ({})
-
-    // The module's manifest id — the single place it appears in this module's QML.
-    // Child views reference it via moduleRoot.moduleId.
-    property string moduleId: "com.240mp.ambient_mode"
-    property var _moduleInfo: appCore ? appCore.get_module_info(moduleId) : ({})
+    property var _moduleInfo: appCore ? appCore.get_module_info("com.240mp.nature") : ({})
     property string moduleName: _moduleInfo.name || ""
     property string moduleIcon: _moduleInfo.icon || ""
-
     property var navStack: []
     property var currentParams: ({})
 
@@ -29,15 +24,15 @@ FocusScope {
             moduleRoot.goBack()
             return
         }
-        var prev = navStack.pop()
-        if (!prev.source || prev.source.toString() === "") {
+        var previous = navStack.pop()
+        if (!previous.source || previous.source.toString() === "") {
             moduleRoot.goBack()
             return
         }
-        var restored = Object.assign({}, prev.params)
-        restored.navListState = prev.listState || {}
+        var restored = Object.assign({}, previous.params)
+        restored.navListState = previous.listState || {}
         currentParams = restored
-        internalLoader.setSource(prev.source, { "navParams": restored })
+        internalLoader.setSource(previous.source, { "navParams": restored })
     }
 
     Loader {

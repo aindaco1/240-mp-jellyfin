@@ -76,9 +76,15 @@ On macOS all user configuration is stored at:
   karaoke_catalog.json ← cached public eighteen-source Karaoke catalog (refreshed after 24 hours)
   karaoke_queue.json   ← persistent Karaoke queue
   karaoke_queue.m3u8   ← generated canonical playback URLs
+  local_files_history.json ← Local resume history
+  local_queue.json     ← persistent Local media and soundtrack queues
+  local_queue.m3u8     ← generated root-contained Local playback paths
+  nature_observations.json ← cached public iNaturalist metadata (no image files)
 ```
 
 Tumblr's current URL and favorites are ordinary module settings inside `config.json`; no separate database or credential file is used.
+
+Nature's atomic cache contains at most 100 validated public observation records and CC0 photo URLs. It contains no credentials or downloaded image data and is refreshed after one hour.
 
 This directory is created automatically on first run. It is separate from the app itself, so deleting or rebuilding the app will not wipe your settings.
 
@@ -200,7 +206,7 @@ Recommended checks before committing code changes:
 ```bash
 cmake --build build
 ctest --test-dir build --output-on-failure
-qmllint -I views Main.qml views/*.qml views/Components/*.qml modules/jellyfin/views/*.qml modules/karaoke/views/*.qml modules/retro_tv/views/*.qml modules/local_files/views/*.qml modules/ambient_mode/views/*.qml modules/tumblr_screensaver/views/*.qml
+qmllint -I views Main.qml views/*.qml views/Components/*.qml modules/jellyfin/views/*.qml modules/karaoke/views/*.qml modules/retro_tv/views/*.qml modules/local_files/views/*.qml modules/tumblr_screensaver/views/*.qml modules/nature/views/*.qml
 git diff --check
 ```
 
@@ -209,6 +215,12 @@ The Karaoke backend suite skips its network integration case by default. Run it 
 ```bash
 KARAOKE_LIVE_TEST=1 ./build/karaoke_backend_tests refreshesLiveCatalog
 KARAOKE_LIVE_TEST=1 ./build/karaoke_backend_tests prefetchesLivePlaybackMedia
+```
+
+Nature's backend suite also skips its real-service canary by default. Run it when changing the request, license, or response policy:
+
+```bash
+NATURE_LIVE_TEST=1 ./build/nature_backend_tests fetchesLiveObservations
 ```
 
 For packaging changes, also run a local install into a temporary prefix and confirm bundled helpers launch:

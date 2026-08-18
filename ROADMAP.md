@@ -2,6 +2,12 @@
 
 Version 1.1 completed the fork's daily-use Apple Silicon macOS foundation. Future work stays focused on reliability and depth in the existing modules rather than expanding platform or module scope.
 
+## Prepared For 1.5.0
+
+- A research-grade, CC0-only iNaturalist Nature montage with compact name/species/location display, metadata-only offline cache, and keyboard refresh/source controls.
+- A shared, tested image montage/media path used by both Nature and Tumblr instead of parallel transition implementations.
+- One consolidated Local module with persistent media/soundtrack queues, Repeat Off/Queue/One, shuffle, auto-launch, per-entry tracks, and the former Loop audio-recovery behavior.
+
 ## Shipped In 1.4.0-rc1
 
 - Independent controller/media display selection while preserving the automatic two-display handoff.
@@ -36,7 +42,7 @@ Version 1.1 completed the fork's daily-use Apple Silicon macOS foundation. Futur
 
 ### First-Run Experience
 
-- Guide new users through Jellyfin sign-in and optional Local/Loop directories.
+- Guide new users through Jellyfin sign-in and the optional Local media directory.
 - Explain the primary-display controller and external playback display on first use.
 - Keep setup recoverable entirely in-app.
 

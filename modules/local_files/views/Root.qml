@@ -18,6 +18,14 @@ FocusScope {
     // Internal navigation state
     property var navStack: []
     property var currentParams: ({})
+    property bool autoLaunchConsumed: false
+
+    function claimAutoLaunch() {
+        if (autoLaunchConsumed)
+            return false
+        autoLaunchConsumed = true
+        return true
+    }
 
     function navigateTo(viewPath, params, fromState) {
         var resolved = Qt.resolvedUrl(viewPath)

@@ -1,6 +1,6 @@
 # 240-mp-jellyfin
 
-240-mp-jellyfin is a macOS Apple Silicon fork of 240-MP: a retro VCR-style media shell built with C++ Qt 6 and QML. The fork keeps the CRT/240p-inspired interface, Local playback, Loop, Retro decade feeds, and a Tumblr image screensaver, adds Jellyfin as the main server-backed media module, and adds an eighteen-source Karaoke queue.
+240-mp-jellyfin is a macOS Apple Silicon fork of 240-MP: a retro VCR-style media shell built with C++ Qt 6 and QML. The fork keeps the CRT/240p-inspired interface, Local playback, Retro decade feeds, and a Tumblr image screensaver, adds Jellyfin as the main server-backed media module, an eighteen-source Karaoke queue, and an iNaturalist-powered Nature montage. Local incorporates the former Loop module's repeatable queue, soundtrack, shuffle, and auto-launch workflows.
 
 The app is a browsing shell, not an embedded video renderer. It launches `mpv` as a subprocess for playback and uses `ffprobe` to inspect local audio/subtitle tracks. CMake supplies pinned standalone `yt-dlp` and Deno helpers for YouTube extraction. Packaged macOS apps also bundle `ffmpeg` for high-quality Karaoke prefetch, along with all required non-system libraries, so end users do not need Homebrew or system helper installs.
 
@@ -12,7 +12,7 @@ The app is a browsing shell, not an embedded video renderer. It launches `mpv` a
 
 ## Current Modules
 
-The home screen order is Jellyfin, Karaoke, Retro, Tumblr, Local, then Loop.
+The home screen order is Jellyfin, Karaoke, Retro, Tumblr, Nature, then Local.
 
 ### Jellyfin
 
@@ -58,26 +58,20 @@ Not yet implemented: music libraries and explicit watched/unwatched controls fro
 
 ### Local
 
-- Folder browsing.
-- The first view shows the active media directory, defaulting to `~/Desktop`.
+- Two-pane folder browsing and persistent queue editing, modeled on Karaoke's keyboard workflow.
+- The first view shows the configurable media directory, defaulting to `~/Desktop`.
 - Common video file support: `mp4`, `mkv`, `avi`, `mov`, `m4v`, `webm`, `wmv`, `flv`, `f4v`, `mpg`, `mpeg`, `vob`.
-- `m3u` and `m3u8` playlists.
-- Loop and shuffle playback options.
+- Still images and common audio files; audio can be collected in an independent soundtrack queue.
+- Local-only `m3u` and `m3u8` imports expand into validated, root-contained queue entries with bounded nesting and queue size.
+- Persistent, duplicate-friendly media and soundtrack queues with reorder, remove, and clear controls. Completed media remains queued; failed media stays visibly marked.
+- Repeat Off, Repeat Queue, Repeat One, queue shuffle, soundtrack shuffle, and optional saved-queue auto-launch.
+- A non-empty soundtrack queue loops in a separate bounded-recovery mpv process while the media queue plays muted.
 - Resume history.
-- Audio and subtitle selection before playback.
+- Play Now and Add to Queue actions after audio and subtitle selection; queued entries retain their file-specific track choices.
 - Sidecar subtitle discovery for common subtitle formats.
 - Still-image playback in folders and playlists, configurable image duration, and extension hiding.
 - Automatic subtitle policies for preferred language, forced-only, on, or off.
-- Shuffle can be fixed on/off or chosen when playback starts.
-
-### Loop
-
-- Looping background video playback.
-- Optional separate audio playlist.
-- Independent video/audio shuffle and optional auto-launch.
-- Bounded restart recovery if the separate-audio process exits unexpectedly.
-- The first view shows the active media directory, defaulting to `~/Desktop`.
-- Kept from the original project as a first-class module.
+- Standalone playlist playback retains its fixed/ask-at-start shuffle setting.
 
 ### Tumblr
 
@@ -87,6 +81,14 @@ Not yet implemented: music libraries and explicit watched/unwatched controls fro
 - Animated GIF playback with montage pause/resume support; static images and GIFs share the same transition/player path.
 - Fullscreen image montage that shuffles the image deck and does not repeat until every discovered image has been shown.
 - Retro 90s-style QML transitions, including falling blocks built from clipped pieces of the incoming image.
+
+### Nature
+
+- Up to 100 recent research-grade, non-captive iNaturalist observations per refresh.
+- One CC0 photo per observation, hosted by iNaturalist's HTTPS open-data service. A live policy check still yields the full 100-observation rotation without requiring an attribution line over the image.
+- A shuffled, non-repeating montage with only the common name, scientific species name, and an English-preferred `City, State/Province, Country` line visible in a compact overlay. Non-Latin locality names fall back to offline Latin transliteration when iNaturalist has no English place record.
+- Keyboard controls for next, pause, refresh, and opening the current source observation.
+- A one-hour metadata-only cache that displays saved observations immediately, refreshes stale data in the background, and leaves saved data visible when the network is unavailable. Image files are not persisted.
 
 ### Plex
 
@@ -107,7 +109,7 @@ APP_ROOT=$(pwd) ./build/240-mp-jellyfin.app/Contents/MacOS/240-mp-jellyfin
 
 ## Install
 
-See [INSTALL.md](INSTALL.md). [Download 240-mp-jellyfin 1.4.1 for Apple Silicon](https://github.com/aindaco1/240-mp-jellyfin/releases/download/v1.4.1/240-mp-jellyfin-v1.4.1-macOS-arm64.dmg), open the notarized DMG, and drag the app onto its Applications shortcut. If EasyDMG is already configured as the Mac's default DMG handler, the same single-app image can automate that copy; no additional installer is required. Checksums and release notes remain available from [GitHub Releases](https://github.com/aindaco1/240-mp-jellyfin/releases).
+See [INSTALL.md](INSTALL.md). [Download 240-mp-jellyfin 1.5.0 for Apple Silicon](https://github.com/aindaco1/240-mp-jellyfin/releases/download/v1.5.0/240-mp-jellyfin-v1.5.0-macOS-arm64.dmg), open the notarized DMG, and drag the app onto its Applications shortcut. If EasyDMG is already configured as the Mac's default DMG handler, the same single-app image can automate that copy; no additional installer is required. Checksums and release notes remain available from [GitHub Releases](https://github.com/aindaco1/240-mp-jellyfin/releases).
 
 Signed releases can check, download, verify, and install later versions from **Settings → Software Update**. The updater verifies GitHub's SHA-256 digest, Apple notarization, the Developer ID team, bundle identity, version, and Apple Silicon architecture before replacing the app.
 
@@ -129,9 +131,13 @@ User configuration is stored outside the app bundle:
   karaoke_catalog.json
   karaoke_queue.json
   karaoke_queue.m3u8
+  local_files_history.json
+  local_queue.json
+  local_queue.m3u8
+  nature_observations.json
 ```
 
-`jellyfin_auth.json` stores the Jellyfin server URL, access token, user ID, username, server identity, and client device ID. Passwords are not persisted. Karaoke files contain public catalog metadata, queue state, and validated canonical YouTube watch URLs; they contain no credentials.
+`jellyfin_auth.json` stores the Jellyfin server URL, access token, user ID, username, server identity, and client device ID. Passwords are not persisted. Karaoke files contain public catalog metadata, queue state, and validated canonical YouTube watch URLs; they contain no credentials. Local files contain owner-only resume state, root-contained local paths, queue UUIDs, track choices, and a generated local playlist. `nature_observations.json` is a bounded metadata-only cache of validated public observations and CC0 photo URLs; image files are not stored.
 
 ## Security Notes
 
@@ -139,6 +145,7 @@ User configuration is stored outside the app bundle:
 - Jellyfin playback tokens are sent to mpv through a temporary private mpv config include instead of command-line header arguments.
 - Jellyfin stream URLs do not include `api_key` tokens.
 - Playback logs redact known token query parameters.
+- Nature requests are anonymous and cached Nature photo URLs are revalidated against the CC0 and trusted-host policy before reuse.
 
 ## License
 

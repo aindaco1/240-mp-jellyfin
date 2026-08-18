@@ -27,6 +27,8 @@ class MpvControllerTest final : public QObject {
 private slots:
     void youtubeModesValidateFormats_data();
     void youtubeModesValidateFormats();
+    void repeatModesUseNarrowMpvArguments_data();
+    void repeatModesUseNarrowMpvArguments();
 };
 
 void MpvControllerTest::youtubeModesValidateFormats_data()
@@ -86,6 +88,41 @@ void MpvControllerTest::youtubeModesValidateFormats()
         "--script-opts-append=ytdl_hook-ytdl_path=") + fakeYtDlpPath));
     QVERIFY(arguments.contains(QStringLiteral(
         "--ytdl-raw-options-append=js-runtimes=deno:") + fakeDenoPath));
+}
+
+void MpvControllerTest::repeatModesUseNarrowMpvArguments_data()
+{
+    QTest::addColumn<QString>("repeatMode");
+    QTest::addColumn<QString>("expectedArgument");
+    QTest::newRow("queue") << QStringLiteral("queue") << QStringLiteral("--loop-playlist=inf");
+    QTest::newRow("one") << QStringLiteral("one") << QStringLiteral("--loop-file=inf");
+}
+
+void MpvControllerTest::repeatModesUseNarrowMpvArguments()
+{
+    QFETCH(QString, repeatMode);
+    QFETCH(QString, expectedArgument);
+    QTemporaryDir root;
+    QVERIFY(root.isValid());
+    const QString appRoot = root.filePath(QStringLiteral("app"));
+    const QString binDirectory = QDir(appRoot).filePath(QStringLiteral("bin"));
+    QVERIFY(QDir().mkpath(binDirectory));
+    const QString markerPath = root.filePath(QStringLiteral("mpv-arguments.txt"));
+    const QByteArray fakeMpv = QByteArrayLiteral("#!/bin/sh\nprintf '%s\\n' \"$@\" > \"")
+        + QFile::encodeName(markerPath) + QByteArrayLiteral("\"\n");
+    QVERIFY(writeExecutable(QDir(binDirectory).filePath(QStringLiteral("mpv")), fakeMpv));
+
+    MpvController controller(appRoot);
+    controller.loadAndPlayWithOptions(QStringLiteral("/tmp/local-queue.m3u8"),
+                                      {{QStringLiteral("repeatMode"), repeatMode}});
+    QTRY_VERIFY_WITH_TIMEOUT(QFile::exists(markerPath), 3000);
+    QFile marker(markerPath);
+    QVERIFY(marker.open(QIODevice::ReadOnly | QIODevice::Text));
+    const QStringList arguments = QString::fromUtf8(marker.readAll())
+                                      .split('\n', Qt::SkipEmptyParts);
+    QVERIFY(arguments.contains(expectedArgument));
+    if (repeatMode == QLatin1String("one"))
+        QVERIFY(!arguments.contains(QStringLiteral("--loop-playlist=inf")));
 }
 
 QTEST_GUILESS_MAIN(MpvControllerTest)
