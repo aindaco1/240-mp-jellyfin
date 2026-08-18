@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(240mp VERSION 1.4.1 LANGUAGES CXX)
+project(240mp VERSION 1.5.0 LANGUAGES CXX)
 
 if(NOT APPLE)
     message(FATAL_ERROR "This fork is macOS-only. Configure and build it on macOS.")
@@ -13,7 +13,7 @@ set(CMAKE_AUTOMOC ON)
 # is reached through a symlink such as macOS's /tmp -> /private/tmp.
 set(CMAKE_AUTOMOC_PATH_PREFIX ON)
 set(APP_DISPLAY_NAME "240-mp-jellyfin")
-set(APP_RELEASE_TAG "v1.4.1")
+set(APP_RELEASE_TAG "v1.5.0")
 set(APP_BUNDLE_IDENTIFIER "com.240mp.jellyfin" CACHE STRING "macOS bundle identifier")
 set(APP_UPDATE_REPOSITORY "aindaco1/240-mp-jellyfin" CACHE STRING "GitHub update repository")
 set(APP_UPDATE_TEAM_ID "PWT3Q52LZ2" CACHE STRING "Expected Developer ID team for updates")
@@ -61,6 +61,7 @@ add_executable(240mp
     src/modules/karaoke/KaraokeBackend.cpp
     src/modules/ambient_mode/AmbientModeBackend.cpp
     src/modules/tumblr_screensaver/TumblrScreensaverBackend.cpp
+    src/modules/nature/NatureBackend.cpp
     src/player/MpvController.cpp
     src/input/IdleTracker.cpp
     src/input/InputManager.mm
@@ -107,6 +108,9 @@ if(BUILD_TESTING)
     add_executable(app_core_tests
         tests/AppCoreTest.cpp
         src/AppCore.cpp
+    )
+    target_compile_definitions(app_core_tests PRIVATE
+        TEST_SOURCE_ROOT="${CMAKE_SOURCE_DIR}"
     )
     target_include_directories(app_core_tests PRIVATE src)
     target_link_libraries(app_core_tests PRIVATE Qt6::Core Qt6::Gui Qt6::Qml Qt6::Network Qt6::Test)
@@ -232,6 +236,14 @@ if(BUILD_TESTING)
     )
     target_link_libraries(tumblr_media_qml_tests PRIVATE Qt6::Core Qt6::Gui Qt6::Quick Qt6::Qml Qt6::Test)
     add_test(NAME tumblr_media_qml COMMAND tumblr_media_qml_tests)
+
+    add_executable(nature_backend_tests
+        tests/NatureBackendTest.cpp
+        src/modules/nature/NatureBackend.cpp
+    )
+    target_include_directories(nature_backend_tests PRIVATE src)
+    target_link_libraries(nature_backend_tests PRIVATE Qt6::Core Qt6::Network Qt6::Test)
+    add_test(NAME nature_backend COMMAND nature_backend_tests)
 
     add_test(
         NAME macos_dmg_contract

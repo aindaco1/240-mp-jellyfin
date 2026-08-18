@@ -72,7 +72,8 @@ jobs:
             modules/retro_tv/views/*.qml \
             modules/local_files/views/*.qml \
             modules/ambient_mode/views/*.qml \
-            modules/tumblr_screensaver/views/*.qml
+            modules/tumblr_screensaver/views/*.qml \
+            modules/nature/views/*.qml
 
       - name: Smoke-test mpv OSD
         run: |

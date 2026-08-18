@@ -1,5 +1,7 @@
 module Components
 AppBar AppBar.qml
+ImageMontage ImageMontage.qml
+MontageMedia MontageMedia.qml
 PlaybackControlPanel PlaybackControlPanel.qml
 SelectableMarqueeRow SelectableMarqueeRow.qml
 PlaybackTransitionOverlay PlaybackTransitionOverlay.qml

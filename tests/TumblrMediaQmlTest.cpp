@@ -4,19 +4,24 @@
 #include <QQmlEngine>
 #include <QQuickItem>
 #include <QQuickWindow>
+#include <QSet>
+#include <QSignalSpy>
 
 class TumblrMediaQmlTest final : public QObject {
     Q_OBJECT
 
 private slots:
     void animatedGifAdvancesFrames();
+    void shuffledDeckDoesNotRepeat();
+    void emptyDeckExhausts();
+    void failedItemsAreRetired();
 };
 
 void TumblrMediaQmlTest::animatedGifAdvancesFrames()
 {
     QQmlEngine engine;
     const QUrl componentUrl = QUrl::fromLocalFile(
-        QStringLiteral(TEST_SOURCE_ROOT "/modules/tumblr_screensaver/views/TumblrMedia.qml"));
+        QStringLiteral(TEST_SOURCE_ROOT "/views/Components/MontageMedia.qml"));
     QQmlComponent component(&engine, componentUrl);
     QVERIFY2(component.isReady(), qPrintable(component.errorString()));
 
@@ -39,6 +44,90 @@ void TumblrMediaQmlTest::animatedGifAdvancesFrames()
     QTRY_VERIFY_WITH_TIMEOUT(media->property("ready").toBool(), 2000);
     const int initialFrame = media->property("currentFrame").toInt();
     QTRY_VERIFY_WITH_TIMEOUT(media->property("currentFrame").toInt() != initialFrame, 2000);
+}
+
+void TumblrMediaQmlTest::shuffledDeckDoesNotRepeat()
+{
+    QQmlEngine engine;
+    engine.addImportPath(QStringLiteral(TEST_SOURCE_ROOT "/views"));
+    QQmlComponent component(
+        &engine,
+        QUrl::fromLocalFile(QStringLiteral(
+            TEST_SOURCE_ROOT "/views/Components/ImageMontage.qml")));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+
+    QScopedPointer<QObject> montage(component.create());
+    QVERIFY2(montage, qPrintable(component.errorString()));
+
+    QVariantList items;
+    for (int i = 0; i < 8; ++i)
+        items.append(QVariantMap{{QStringLiteral("id"), i}});
+    QVERIFY(montage->setProperty("items", items));
+    QVERIFY(QMetaObject::invokeMethod(montage.data(), "refillDeck"));
+
+    const QVariantList firstDeck = montage->property("deck").toList();
+    QCOMPARE(firstDeck.size(), items.size());
+    QSet<int> unique;
+    for (const QVariant &value : firstDeck)
+        unique.insert(value.toInt());
+    QCOMPARE(unique.size(), items.size());
+
+    const int previous = firstDeck.first().toInt();
+    QVERIFY(montage->setProperty("internalCurrentIndex", previous));
+    QVERIFY(montage->setProperty("deck", QVariantList{}));
+    QVERIFY(QMetaObject::invokeMethod(montage.data(), "refillDeck"));
+    const QVariantList secondDeck = montage->property("deck").toList();
+    QCOMPARE(secondDeck.size(), items.size());
+    QVERIFY(secondDeck.first().toInt() != previous);
+}
+
+void TumblrMediaQmlTest::emptyDeckExhausts()
+{
+    QQmlEngine engine;
+    engine.addImportPath(QStringLiteral(TEST_SOURCE_ROOT "/views"));
+    QQmlComponent component(
+        &engine,
+        QUrl::fromLocalFile(QStringLiteral(
+            TEST_SOURCE_ROOT "/views/Components/ImageMontage.qml")));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+
+    QScopedPointer<QObject> montage(component.create());
+    QVERIFY2(montage, qPrintable(component.errorString()));
+    QSignalSpy exhaustedSpy(montage.data(), SIGNAL(exhausted()));
+    QVERIFY(exhaustedSpy.isValid());
+
+    QVERIFY(QMetaObject::invokeMethod(montage.data(), "start"));
+    QCOMPARE(exhaustedSpy.count(), 1);
+    QVERIFY(!montage->property("running").toBool());
+}
+
+void TumblrMediaQmlTest::failedItemsAreRetired()
+{
+    QQmlEngine engine;
+    engine.addImportPath(QStringLiteral(TEST_SOURCE_ROOT "/views"));
+    QQmlComponent component(
+        &engine,
+        QUrl::fromLocalFile(QStringLiteral(
+            TEST_SOURCE_ROOT "/views/Components/ImageMontage.qml")));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+
+    QScopedPointer<QObject> montage(component.create());
+    QVERIFY2(montage, qPrintable(component.errorString()));
+    const QVariantList items{
+        QVariantMap{{QStringLiteral("url"), QStringLiteral("file:///definitely-missing-nature-a.jpg")}},
+        QVariantMap{{QStringLiteral("url"), QStringLiteral("file:///definitely-missing-nature-b.jpg")}}
+    };
+    QVERIFY(montage->setProperty("items", items));
+    QSignalSpy failedSpy(montage.data(), SIGNAL(itemFailed(QVariant)));
+    QSignalSpy exhaustedSpy(montage.data(), SIGNAL(exhausted()));
+    QVERIFY(failedSpy.isValid());
+    QVERIFY(exhaustedSpy.isValid());
+
+    QVERIFY(QMetaObject::invokeMethod(montage.data(), "start"));
+    QTRY_COMPARE_WITH_TIMEOUT(exhaustedSpy.size(), 1, 2000);
+    QCOMPARE(failedSpy.size(), 2);
+    QCOMPARE(montage->property("failedItemCount").toInt(), 2);
+    QVERIFY(!montage->property("running").toBool());
 }
 
 QTEST_MAIN(TumblrMediaQmlTest)

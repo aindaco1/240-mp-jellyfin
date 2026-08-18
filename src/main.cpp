@@ -20,6 +20,7 @@
 #include "modules/karaoke/KaraokeBackend.h"
 #include "modules/ambient_mode/AmbientModeBackend.h"
 #include "modules/tumblr_screensaver/TumblrScreensaverBackend.h"
+#include "modules/nature/NatureBackend.h"
 #include "player/MpvController.h"
 #include "input/IdleTracker.h"
 #include "input/InputManager.h"
@@ -135,6 +136,7 @@ int main(int argc, char *argv[]) {
     KaraokeBackend      karaokeBackend(appRoot, dataRoot);
     AmbientModeBackend  ambientMode(appRoot, dataRoot);
     TumblrScreensaverBackend tumblrScreensaver;
+    NatureBackend       natureBackend(dataRoot);
     MpvController       mpvController(appRoot, &appCore);
     mpvController.setPlaybackScreenIndex(displaySelection.mediaIndex);
     IdleTracker         idleTracker;
@@ -171,6 +173,7 @@ int main(int argc, char *argv[]) {
     appCore.registerModule("com.240mp.karaoke",      "karaokeBackend",     &karaokeBackend, ctx);
     appCore.registerModule("com.240mp.ambient_mode", "ambientModeBackend", &ambientMode, ctx);
     appCore.registerModule("com.240mp.tumblr_screensaver", "tumblrScreensaverBackend", &tumblrScreensaver, ctx);
+    appCore.registerModule("com.240mp.nature", "natureBackend", &natureBackend, ctx);
 
     ctx->setContextProperty("appCore",       &appCore);
     ctx->setContextProperty("mpvController", &mpvController);
