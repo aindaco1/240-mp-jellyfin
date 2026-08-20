@@ -4,6 +4,8 @@ All notable changes to 240-mp-jellyfin are documented here.
 
 ## [Unreleased]
 
+## [1.5.2] - 2026-08-20
+
 ### Fixed
 
 - Kept Local's main media audio disabled after each queued file loads; reapplying a file's saved audio-track choice can no longer override soundtrack mode and re-enable the video's audio.
