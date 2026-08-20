@@ -20,6 +20,8 @@ FocusScope {
     property int lastDurationMs: 0
     property bool stopping: false
     property bool playbackStarted: false
+    property bool waitingForSoundtrack: false
+    property int pendingStartMs: 0
     property bool overlayVisible: false
     property int choiceIndex: 0
     property var choices: []
@@ -51,10 +53,12 @@ FocusScope {
         mpvController.selectPlaybackTracks(entry.audioTrack || 0, subtitleTrack, subtitleFiles)
     }
 
-    function launchPlayback(startMs) {
-        if (playbackStarted)
+    function startMainPlayback(startMs) {
+        if (playbackStarted || stopping)
             return
         playbackStarted = true
+        waitingForSoundtrack = false
+        soundtrackStartupTimer.stop()
         overlayVisible = false
         mpvController.loadAndPlayWithOptions(playlistPath, {
             startSeconds: startMs > 0 ? startMs / 1000.0 : 0,
@@ -65,8 +69,20 @@ FocusScope {
             imageDurationSeconds: imageDurationSeconds,
             muteAudio: hasSoundtrack
         })
-        if (soundtrackPaths.length > 0)
+    }
+
+    function launchPlayback(startMs) {
+        if (playbackStarted || waitingForSoundtrack)
+            return
+        overlayVisible = false
+        if (soundtrackPaths.length > 0) {
+            pendingStartMs = startMs
+            waitingForSoundtrack = true
+            soundtrackStartupTimer.restart()
             localFilesBackend.startAudio(soundtrackPaths, false)
+            return
+        }
+        startMainPlayback(startMs)
     }
 
     function chooseResumeBehavior() {
@@ -95,6 +111,12 @@ FocusScope {
         if (stopping)
             return
         stopping = true
+        if (waitingForSoundtrack) {
+            soundtrackStartupTimer.stop()
+            localFilesBackend.stopAudio()
+            goBack()
+            return
+        }
         mpvController.stop()
     }
 
@@ -190,11 +212,36 @@ FocusScope {
         }
     }
 
+    Connections {
+        target: localFilesBackend
+
+        function onAudioPlaybackStarted() {
+            if (waitingForSoundtrack)
+                startMainPlayback(pendingStartMs)
+        }
+
+        function onAudioPlaybackFailed() {
+            if (waitingForSoundtrack)
+                startMainPlayback(pendingStartMs)
+        }
+    }
+
+    Timer {
+        id: soundtrackStartupTimer
+        interval: 45000
+        repeat: false
+        onTriggered: {
+            if (waitingForSoundtrack)
+                startMainPlayback(pendingStartMs)
+        }
+    }
+
     PlaybackControlPanel {
         anchors.fill: parent
         title: currentEntry() ? (currentEntry().displayTitle || "LOCAL QUEUE") : "LOCAL QUEUE"
         subtitle: root.hasMediaOutputScreen ? "PLAYING QUEUE ON MEDIA DISPLAY" : "PLAYING LOCAL QUEUE"
-        stateText: (currentIndex + 1) + " / " + entries.length + " - " + repeatLabel() +
+        stateText: (waitingForSoundtrack ? "LOADING SOUNDTRACK - " : "") +
+                   (currentIndex + 1) + " / " + entries.length + " - " + repeatLabel() +
                    (shuffled ? " - SHUFFLED" : "") +
                    (hasSoundtrack ? " - SOUNDTRACK" : "") +
                    (lastDurationMs > 0 ? " - " + formatTime(lastPositionMs) + " / " +

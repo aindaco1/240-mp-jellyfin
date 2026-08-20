@@ -1,5 +1,5 @@
-set(YT_DLP_VERSION "2026.07.04" CACHE STRING "Pinned yt-dlp release")
-set(YT_DLP_SHA256 "498bd0dae17855c599d371d68ec5bafc439a9d8640e838be25c765a9792f261b"
+set(YT_DLP_VERSION "2026.08.19" CACHE STRING "Pinned yt-dlp release")
+set(YT_DLP_SHA256 "0f192b7ec147ab6288885d6351d9ab67367640029b4377576ef46dd79cf7b202"
     CACHE STRING "SHA-256 for the pinned yt-dlp_macos executable")
 set(DENO_VERSION "2.9.3" CACHE STRING "Pinned Deno release")
 set(DENO_SHA256 "1b2972f7ceb6df28d9600eab18d423bebb9aa18db02f01d7eb37a5b501482203"
@@ -90,7 +90,7 @@ set(_yt_dlp_licenses "${_helper_cache}/yt-dlp-THIRD_PARTY_LICENSES.txt")
 download_verified(
     "https://raw.githubusercontent.com/yt-dlp/yt-dlp/${YT_DLP_VERSION}/THIRD_PARTY_LICENSES.txt"
     "${_yt_dlp_licenses}"
-    "b085c65586a953cdb4b13c6390d63ec984d66912e4b6a19e66ba3582f2ed104b")
+    "472aefe951c7db35e1657c1d13fd337140511ed6f2b329205105ad441c5a02b7")
 
 set(_yt_dlp_license "${_helper_cache}/yt-dlp-LICENSE")
 download_verified(

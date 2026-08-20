@@ -265,6 +265,29 @@ jobs:
               'import json,sys; print(json.loads(sys.stdin.readline()).get("id", ""))')
           test "$local_playlist_sample" = "aqz-KE-bpKQ"
 
+          # Prove the signed bundle can open an actual YouTube audio stream,
+          # not merely expand playlist metadata. This catches extractor client
+          # changes that return a format URL which Google Video rejects.
+          env -i HOME="$HELPER_HOME" PATH=/usr/bin:/bin /usr/bin/python3 - "$BIN" <<'PY'
+          import os
+          import subprocess
+          import sys
+
+          helper_bin = sys.argv[1]
+          subprocess.run([
+              os.path.join(helper_bin, "mpv"),
+              "https://www.youtube.com/watch?v=aqz-KE-bpKQ",
+              "--no-video", "--ao=null", "--length=0.25", "--no-config",
+              "--no-terminal", "--really-quiet",
+              "--script-opts-append=ytdl_hook-ytdl_path=" + os.path.join(helper_bin, "yt-dlp"),
+              "--ytdl-raw-options-append=ignore-config=",
+              "--ytdl-raw-options-append=no-update=",
+              "--ytdl-raw-options-append=no-cache-dir=",
+              "--ytdl-raw-options-append=check-formats=",
+              "--ytdl-raw-options-append=js-runtimes=deno:" + os.path.join(helper_bin, "deno"),
+          ], check=True, timeout=90)
+          PY
+
       - name: Prepare notarization credentials
         env:
           APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}

@@ -178,6 +178,19 @@ LocalFilesBackend::LocalFilesBackend(const QString &appRoot, const QString &data
     : QObject(parent), m_appRoot(appRoot), m_dataRoot(dataRoot),
       m_mediaRoot(defaultMediaRoot())
 {
+    m_audioSocketPath = QStringLiteral("/tmp/240mp-local-audio-") +
+        QUuid::createUuid().toString(QUuid::Id128).left(16) + QStringLiteral(".sock");
+    m_audioIpc = new QLocalSocket(this);
+    connect(m_audioIpc, &QLocalSocket::connected, this, [this] {
+        m_audioConnectTimer->stop();
+    });
+    connect(m_audioIpc, &QLocalSocket::readyRead,
+            this, &LocalFilesBackend::onAudioIpcReadyRead);
+    m_audioConnectTimer = new QTimer(this);
+    m_audioConnectTimer->setInterval(100);
+    connect(m_audioConnectTimer, &QTimer::timeout,
+            this, &LocalFilesBackend::tryConnectAudioIpc);
+
     // Local remains configurable, with ~/Desktop as the sole default. The old
     // Loop root is intentionally not migrated into the consolidated module.
     QFile configFile(m_dataRoot + QStringLiteral("/config.json"));
@@ -1157,6 +1170,7 @@ void LocalFilesBackend::startAudio(const QStringList &paths, bool shuffle)
     m_audioPaths = validatedPaths;
     m_audioShuffle = shuffle;
     m_audioStopRequested = false;
+    m_audioPlaybackReady = false;
     m_audioRespawnCount = 0;
     ++m_audioGeneration;
     launchAudioProcess();
@@ -1171,9 +1185,14 @@ void LocalFilesBackend::launchAudioProcess()
         qWarning("[LocalFiles] mpv unavailable; soundtrack will not play");
         return;
     }
+    m_audioConnectTimer->stop();
+    m_audioIpc->abort();
+    QFile::remove(m_audioSocketPath);
+
     QStringList arguments = m_audioPaths;
     arguments << QStringLiteral("--no-video")
-              << QStringLiteral("--loop-playlist=inf");
+              << QStringLiteral("--loop-playlist=inf")
+              << QStringLiteral("--input-ipc-server=") + m_audioSocketPath;
     if (m_audioShuffle)
         arguments << QStringLiteral("--shuffle");
     const bool hasYouTube = std::any_of(
@@ -1196,8 +1215,39 @@ void LocalFilesBackend::launchAudioProcess()
             onAudioProcessFinished();
     });
     m_audioProcess->start(binary, arguments);
+    m_audioConnectTimer->start();
     qDebug("[LocalFiles] soundtrack process started: %lld track(s)",
            static_cast<long long>(m_audioPaths.size()));
+}
+
+void LocalFilesBackend::tryConnectAudioIpc()
+{
+    if (m_audioStopRequested || !m_audioProcess ||
+        m_audioProcess->state() == QProcess::NotRunning) {
+        m_audioConnectTimer->stop();
+        return;
+    }
+    if (m_audioIpc->state() == QLocalSocket::ConnectedState ||
+        m_audioIpc->state() == QLocalSocket::ConnectingState) {
+        return;
+    }
+    m_audioIpc->connectToServer(m_audioSocketPath);
+}
+
+void LocalFilesBackend::onAudioIpcReadyRead()
+{
+    while (m_audioIpc->canReadLine()) {
+        const QJsonObject message = QJsonDocument::fromJson(
+            m_audioIpc->readLine().trimmed()).object();
+        if (message.value(QStringLiteral("event")).toString() !=
+            QLatin1String("playback-restart")) {
+            continue;
+        }
+        if (!m_audioPlaybackReady) {
+            m_audioPlaybackReady = true;
+            emit audioPlaybackStarted();
+        }
+    }
 }
 
 void LocalFilesBackend::stopAudio()
@@ -1205,6 +1255,9 @@ void LocalFilesBackend::stopAudio()
     m_audioStopRequested = true;
     m_audioRespawnCount = 0;
     ++m_audioGeneration;
+    m_audioConnectTimer->stop();
+    m_audioIpc->abort();
+    QFile::remove(m_audioSocketPath);
     if (!m_audioProcess)
         return;
     m_audioProcess->disconnect(this);
@@ -1218,6 +1271,9 @@ void LocalFilesBackend::stopAudio()
 
 void LocalFilesBackend::onAudioProcessFinished()
 {
+    m_audioConnectTimer->stop();
+    m_audioIpc->abort();
+    QFile::remove(m_audioSocketPath);
     if (m_audioProcess) {
         m_audioProcess->disconnect(this);
         m_audioProcess->deleteLater();
@@ -1228,6 +1284,8 @@ void LocalFilesBackend::onAudioProcessFinished()
     static constexpr int kMaxRespawns = 5;
     if (m_audioRespawnCount >= kMaxRespawns) {
         qWarning("[LocalFiles] soundtrack repeatedly failed; stopping retries");
+        if (!m_audioPlaybackReady)
+            emit audioPlaybackFailed(QStringLiteral("Soundtrack audio could not start."));
         return;
     }
     ++m_audioRespawnCount;

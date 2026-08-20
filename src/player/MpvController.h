@@ -135,6 +135,7 @@ private:
     bool          m_headlessMode = false;
     bool          m_pendingStartClear = false;
     bool          m_paused = false;
+    bool          m_muteAudio = false;
     int           m_previousVt   = -1;
     int           m_qtDrmFd      = -1;
 #ifdef Q_OS_LINUX

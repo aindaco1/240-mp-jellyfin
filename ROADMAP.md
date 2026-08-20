@@ -2,6 +2,11 @@
 
 Version 1.1 completed the fork's daily-use Apple Silicon macOS foundation. Future work stays focused on reliability and depth in the existing modules rather than expanding platform or module scope.
 
+## Shipped In 1.5.2
+
+- Local soundtrack mode keeps the main media audio disabled after every queued file reloads its saved track choice.
+- Local waits for separate soundtrack playback to begin before starting the media queue, and the updated pinned yt-dlp helper restores current YouTube audio streaming.
+
 ## Shipped In 1.5.1
 
 - Local YouTube soundtrack playlist import with persistent ordered/reorderable entries and audio-only streaming through bundled helpers.
