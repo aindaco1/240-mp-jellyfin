@@ -1,5 +1,5 @@
-set(YT_DLP_VERSION "2026.07.04" CACHE STRING "Pinned yt-dlp release")
-set(YT_DLP_SHA256 "498bd0dae17855c599d371d68ec5bafc439a9d8640e838be25c765a9792f261b"
+set(YT_DLP_VERSION "2026.08.19" CACHE STRING "Pinned yt-dlp release")
+set(YT_DLP_SHA256 "0f192b7ec147ab6288885d6351d9ab67367640029b4377576ef46dd79cf7b202"
     CACHE STRING "SHA-256 for the pinned yt-dlp_macos executable")
 set(DENO_VERSION "2.9.3" CACHE STRING "Pinned Deno release")
 set(DENO_SHA256 "1b2972f7ceb6df28d9600eab18d423bebb9aa18db02f01d7eb37a5b501482203"

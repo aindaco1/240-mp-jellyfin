@@ -2,6 +2,7 @@
 
 #include <QDir>
 #include <QFile>
+#include <QJsonDocument>
 #include <QTemporaryDir>
 #include <QtTest>
 
@@ -30,6 +31,7 @@ private slots:
     void repeatModesUseNarrowMpvArguments_data();
     void repeatModesUseNarrowMpvArguments();
     void muteAudioUsesNoAudioArgument();
+    void trackSelectionPreservesLaunchMute();
 };
 
 void MpvControllerTest::youtubeModesValidateFormats_data()
@@ -147,6 +149,90 @@ void MpvControllerTest::muteAudioUsesNoAudioArgument()
     const QStringList arguments = QString::fromUtf8(marker.readAll())
                                       .split('\n', Qt::SkipEmptyParts);
     QVERIFY(arguments.contains(QStringLiteral("--no-audio")));
+}
+
+void MpvControllerTest::trackSelectionPreservesLaunchMute()
+{
+    QTemporaryDir root;
+    QVERIFY(root.isValid());
+    const QString appRoot = root.filePath(QStringLiteral("app"));
+    const QString binDirectory = QDir(appRoot).filePath(QStringLiteral("bin"));
+    QVERIFY(QDir().mkpath(binDirectory));
+
+    const QString markerPath = root.filePath(QStringLiteral("ipc-commands.jsonl"));
+    const QByteArray fakeMpv = QByteArrayLiteral(
+        "#!/bin/sh\n"
+        "socket_path=''\n"
+        "for argument in \"$@\"; do\n"
+        "  case \"$argument\" in\n"
+        "    --input-ipc-server=*) socket_path=${argument#*=} ;;\n"
+        "  esac\n"
+        "done\n"
+        "exec /usr/bin/python3 - \"$socket_path\" \"")
+        + QFile::encodeName(markerPath)
+        + QByteArrayLiteral("\" <<'PY'\n"
+            "import json, os, socket, sys, time\n"
+            "socket_path, marker_path = sys.argv[1:3]\n"
+            "try:\n"
+            "    os.unlink(socket_path)\n"
+            "except FileNotFoundError:\n"
+            "    pass\n"
+            "server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)\n"
+            "server.bind(socket_path)\n"
+            "server.listen(1)\n"
+            "connection, _ = server.accept()\n"
+            "connection.settimeout(5)\n"
+            "connection.sendall(b'{\"event\":\"property-change\",\"name\":\"playlist-pos\",\"data\":0}\\n')\n"
+            "connection.sendall(b'{\"event\":\"file-loaded\"}\\n')\n"
+            "buffer = b''\n"
+            "deadline = time.time() + 5\n"
+            "with open(marker_path, 'ab', buffering=0) as marker:\n"
+            "    while time.time() < deadline:\n"
+            "        try:\n"
+            "            chunk = connection.recv(4096)\n"
+            "        except socket.timeout:\n"
+            "            continue\n"
+            "        if not chunk:\n"
+            "            break\n"
+            "        buffer += chunk\n"
+            "        while b'\\n' in buffer:\n"
+            "            line, buffer = buffer.split(b'\\n', 1)\n"
+            "            marker.write(line + b'\\n')\n"
+            "            try:\n"
+            "                command = json.loads(line).get('command', [])\n"
+            "            except Exception:\n"
+            "                command = []\n"
+            "            if command[:2] == ['set_property', 'aid']:\n"
+            "                time.sleep(0.1)\n"
+            "                sys.exit(0)\n"
+            "sys.exit(1)\n"
+            "PY\n");
+    QVERIFY(writeExecutable(QDir(binDirectory).filePath(QStringLiteral("mpv")), fakeMpv));
+
+    MpvController controller(appRoot);
+    QSignalSpy loadedSpy(&controller, &MpvController::playbackItemLoaded);
+    controller.loadAndPlayWithOptions(QStringLiteral("/tmp/local-queue.m3u8"),
+                                      {{QStringLiteral("muteAudio"), true}});
+    QTRY_COMPARE_WITH_TIMEOUT(loadedSpy.count(), 1, 5000);
+
+    controller.selectPlaybackTracks(1, -2, {});
+    const auto markerContainsMutedSelection = [&markerPath] {
+        QFile marker(markerPath);
+        if (!marker.open(QIODevice::ReadOnly | QIODevice::Text))
+            return false;
+        while (!marker.atEnd()) {
+            const QJsonArray command = QJsonDocument::fromJson(marker.readLine())
+                                           .object().value(QStringLiteral("command")).toArray();
+            if (command.size() >= 3 &&
+                command.at(0).toString() == QLatin1String("set_property") &&
+                command.at(1).toString() == QLatin1String("aid") &&
+                command.at(2).toString() == QLatin1String("no")) {
+                return true;
+            }
+        }
+        return false;
+    };
+    QTRY_VERIFY_WITH_TIMEOUT(markerContainsMutedSelection(), 5000);
 }
 
 QTEST_GUILESS_MAIN(MpvControllerTest)

@@ -187,7 +187,7 @@ if(BUILD_TESTING)
         DEV_DENO_EXECUTABLE="${DENO_EXECUTABLE}"
     )
     target_include_directories(local_files_backend_tests PRIVATE src)
-    target_link_libraries(local_files_backend_tests PRIVATE Qt6::Core Qt6::Test)
+    target_link_libraries(local_files_backend_tests PRIVATE Qt6::Core Qt6::Network Qt6::Test)
     add_test(NAME local_files_backend COMMAND local_files_backend_tests)
 
     add_executable(update_manager_tests

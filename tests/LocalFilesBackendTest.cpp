@@ -9,6 +9,8 @@
 #include <QTemporaryDir>
 #include <QtTest>
 
+#include <algorithm>
+
 class LocalFilesBackendTest final : public QObject {
     Q_OBJECT
 
@@ -26,6 +28,7 @@ private slots:
     void changingMediaRootPrunesOutOfRootQueueItems();
     void usesBundledMpvForSeparateAudio();
     void streamsYouTubeSoundtrackWithBundledHelpers();
+    void reportsWhenSeparateAudioActuallyStarts();
 };
 
 static bool writeFile(const QString &path, const QByteArray &contents = {})
@@ -491,10 +494,60 @@ void LocalFilesBackendTest::streamsYouTubeSoundtrackWithBundledHelpers()
     QCOMPARE(arguments.first(), videoUrl);
     QVERIFY(arguments.contains(QStringLiteral("--no-video")));
     QVERIFY(arguments.contains(QStringLiteral("--loop-playlist=inf")));
+    QVERIFY(std::any_of(arguments.cbegin(), arguments.cend(), [](const QString &argument) {
+        return argument.startsWith(QStringLiteral("--input-ipc-server="));
+    }));
     QVERIFY(arguments.contains(
         QStringLiteral("--script-opts-append=ytdl_hook-ytdl_path=") + fakeYtDlpPath));
     QVERIFY(arguments.contains(
         QStringLiteral("--ytdl-raw-options-append=js-runtimes=deno:") + fakeDenoPath));
+    QVERIFY(arguments.contains(QStringLiteral("--ytdl-raw-options-append=no-cache-dir=")));
+}
+
+void LocalFilesBackendTest::reportsWhenSeparateAudioActuallyStarts()
+{
+    QTemporaryDir root;
+    QVERIFY(root.isValid());
+    const QString appRoot = root.filePath(QStringLiteral("app"));
+    const QString dataRoot = root.filePath(QStringLiteral("data"));
+    const QString binDirectory = QDir(appRoot).filePath(QStringLiteral("bin"));
+    QVERIFY(QDir().mkpath(binDirectory));
+    QVERIFY(QDir().mkpath(dataRoot));
+    QVERIFY(writeLocalConfig(dataRoot, root.path()));
+
+    const QByteArray fakeMpv = QByteArrayLiteral(
+        "#!/bin/sh\n"
+        "socket_path=''\n"
+        "for argument in \"$@\"; do\n"
+        "  case \"$argument\" in\n"
+        "    --input-ipc-server=*) socket_path=${argument#*=} ;;\n"
+        "  esac\n"
+        "done\n"
+        "exec /usr/bin/python3 - \"$socket_path\" <<'PY'\n"
+        "import os, socket, sys, time\n"
+        "socket_path = sys.argv[1]\n"
+        "try:\n"
+        "    os.unlink(socket_path)\n"
+        "except FileNotFoundError:\n"
+        "    pass\n"
+        "server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)\n"
+        "server.bind(socket_path)\n"
+        "server.listen(1)\n"
+        "connection, _ = server.accept()\n"
+        "connection.sendall(b'{\"event\":\"file-loaded\"}\\n')\n"
+        "time.sleep(0.2)\n"
+        "connection.sendall(b'{\"event\":\"playback-restart\"}\\n')\n"
+        "time.sleep(5)\n"
+        "PY\n");
+    QVERIFY(writeExecutable(QDir(binDirectory).filePath(QStringLiteral("mpv")), fakeMpv));
+
+    const QString audioPath = root.filePath(QStringLiteral("soundtrack.mp3"));
+    QVERIFY(writeFile(audioPath));
+    LocalFilesBackend backend(appRoot, dataRoot);
+    QSignalSpy readySpy(&backend, &LocalFilesBackend::audioPlaybackStarted);
+    backend.startAudio({audioPath});
+    QTRY_COMPARE_WITH_TIMEOUT(readySpy.count(), 1, 5000);
+    backend.stopAudio();
 }
 
 QTEST_MAIN(LocalFilesBackendTest)

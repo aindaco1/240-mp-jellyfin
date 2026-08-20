@@ -277,6 +277,7 @@ void MpvController::loadAndPlayWithOptions(const QString &url, const QVariantMap
     const QStringList inputBindings = options.value("inputBindings").toStringList();
     const QStringList extraArguments = options.value("extraArguments").toStringList();
     const int imageDurationSeconds = qMax(0, options.value("imageDurationSeconds").toInt());
+    m_muteAudio = muteAudio;
     if (m_process) {
         m_process->disconnect();
         if (m_process->state() != QProcess::NotRunning) {
@@ -575,8 +576,15 @@ void MpvController::clearOsdPrompt() {
 
 void MpvController::selectPlaybackTracks(int audioTrack, int subtitleTrack,
                                          const QStringList &subtitleFiles) {
-    sendCommand({"set_property", "aid", audioTrack > 0 ? QJsonValue(audioTrack)
-                                                        : QJsonValue(QStringLiteral("auto"))});
+    // A playlist item load must not undo the launch-time soundtrack mute.
+    // Local reapplies each file's saved track choices after file-loaded, so
+    // selecting that saved aid here used to re-enable the video's audio even
+    // when the process had started with --no-audio.
+    const QJsonValue selectedAudio = m_muteAudio
+        ? QJsonValue(QStringLiteral("no"))
+        : (audioTrack > 0 ? QJsonValue(audioTrack)
+                          : QJsonValue(QStringLiteral("auto")));
+    sendCommand({"set_property", "aid", selectedAudio});
     for (int index = 0; index < subtitleFiles.size(); ++index) {
         const QString path = subtitleFiles.at(index).trimmed();
         if (!path.isEmpty())

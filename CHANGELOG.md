@@ -4,6 +4,11 @@ All notable changes to 240-mp-jellyfin are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- Kept Local's main media audio disabled after each queued file loads; reapplying a file's saved audio-track choice can no longer override soundtrack mode and re-enable the video's audio.
+- Updated the pinned yt-dlp helper for current YouTube playback, made Local wait for the soundtrack's actual mpv playback event before starting the media queue, and added a signed-bundle canary that opens a real YouTube audio stream rather than checking playlist metadata alone.
+
 ## [1.5.1] - 2026-08-19
 
 ### Added

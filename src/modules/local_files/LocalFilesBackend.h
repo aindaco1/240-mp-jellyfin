@@ -1,9 +1,11 @@
 #pragma once
 
 #include <QByteArray>
+#include <QLocalSocket>
 #include <QObject>
 #include <QProcess>
 #include <QSet>
+#include <QTimer>
 #include <QVariantList>
 #include <QVariantMap>
 
@@ -59,6 +61,8 @@ signals:
     void youtubePlaylistImportStarted();
     void youtubePlaylistImportFinished(int addedCount);
     void youtubePlaylistImportFailed(const QString &message);
+    void audioPlaybackStarted();
+    void audioPlaybackFailed(const QString &message);
 
 public slots:
     void onSettingChanged(const QString &moduleId, const QString &key,
@@ -66,6 +70,8 @@ public slots:
 
 private slots:
     void onAudioProcessFinished();
+    void tryConnectAudioIpc();
+    void onAudioIpcReadyRead();
     void onYouTubePlaylistProcessFinished(int exitCode, QProcess::ExitStatus exitStatus);
 
 private:
@@ -116,8 +122,12 @@ private:
     QStringList m_audioPaths;
     bool m_audioShuffle = false;
     bool m_audioStopRequested = true;
+    bool m_audioPlaybackReady = false;
     int m_audioRespawnCount = 0;
     quint64 m_audioGeneration = 0;
+    QLocalSocket *m_audioIpc = nullptr;
+    QTimer *m_audioConnectTimer = nullptr;
+    QString m_audioSocketPath;
 
     QProcess *m_youtubePlaylistProcess = nullptr;
     QByteArray m_youtubePlaylistOutputBuffer;
