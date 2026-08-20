@@ -29,6 +29,7 @@ private slots:
     void youtubeModesValidateFormats();
     void repeatModesUseNarrowMpvArguments_data();
     void repeatModesUseNarrowMpvArguments();
+    void muteAudioUsesNoAudioArgument();
 };
 
 void MpvControllerTest::youtubeModesValidateFormats_data()
@@ -123,6 +124,29 @@ void MpvControllerTest::repeatModesUseNarrowMpvArguments()
     QVERIFY(arguments.contains(expectedArgument));
     if (repeatMode == QLatin1String("one"))
         QVERIFY(!arguments.contains(QStringLiteral("--loop-playlist=inf")));
+}
+
+void MpvControllerTest::muteAudioUsesNoAudioArgument()
+{
+    QTemporaryDir root;
+    QVERIFY(root.isValid());
+    const QString appRoot = root.filePath(QStringLiteral("app"));
+    const QString binDirectory = QDir(appRoot).filePath(QStringLiteral("bin"));
+    QVERIFY(QDir().mkpath(binDirectory));
+    const QString markerPath = root.filePath(QStringLiteral("mpv-arguments.txt"));
+    const QByteArray fakeMpv = QByteArrayLiteral("#!/bin/sh\nprintf '%s\\n' \"$@\" > \"")
+        + QFile::encodeName(markerPath) + QByteArrayLiteral("\"\n");
+    QVERIFY(writeExecutable(QDir(binDirectory).filePath(QStringLiteral("mpv")), fakeMpv));
+
+    MpvController controller(appRoot);
+    controller.loadAndPlayWithOptions(QStringLiteral("/tmp/local-queue.m3u8"),
+                                      {{QStringLiteral("muteAudio"), true}});
+    QTRY_VERIFY_WITH_TIMEOUT(QFile::exists(markerPath), 3000);
+    QFile marker(markerPath);
+    QVERIFY(marker.open(QIODevice::ReadOnly | QIODevice::Text));
+    const QStringList arguments = QString::fromUtf8(marker.readAll())
+                                      .split('\n', Qt::SkipEmptyParts);
+    QVERIFY(arguments.contains(QStringLiteral("--no-audio")));
 }
 
 QTEST_GUILESS_MAIN(MpvControllerTest)

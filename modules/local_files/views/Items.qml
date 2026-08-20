@@ -21,6 +21,8 @@ FocusScope {
     property bool queueShuffle: false
     property bool soundtrackShuffle: false
     property bool autoLaunch: false
+    property bool youtubeInputVisible: false
+    property bool youtubeImporting: false
 
     signal navigateTo(string path, var params, var listState)
     signal goBack()
@@ -32,7 +34,8 @@ FocusScope {
 
     function displayName(item) {
         var name = item ? (item.name || item.displayTitle || "") : ""
-        if (!hideExtensions || (item && item.isFolder) || name.charAt(0) === ".")
+        if (!hideExtensions || (item && (item.isFolder || item.source === "youtube")) ||
+            name.charAt(0) === ".")
             return name
         var dot = name.lastIndexOf(".")
         return dot > 0 ? name.slice(0, dot) : name
@@ -137,7 +140,8 @@ FocusScope {
             startIndex: plan.startIndex || 0,
             repeatMode: repeatMode,
             shuffled: queueShuffle,
-            soundtrackPaths: localFilesBackend.soundtrackPaths(soundtrackShuffle)
+            soundtrackPaths: localFilesBackend.soundtrackPaths(soundtrackShuffle),
+            muteMainAudio: plan.muteMainAudio === true
         }, {
             currentIndex: fileList.currentIndex,
             activePane: 1,
@@ -149,16 +153,52 @@ FocusScope {
 
     function startSelectedQueueEntry() {
         if (queueKind !== "media") {
-            statusMessage = "SWITCH TO MEDIA QUEUE TO START PLAYBACK"
-            statusTimer.restart()
+            openYouTubePlaylistInput()
             return
         }
         var entry = queueList.currentIndex >= 0 ? mediaQueue[queueList.currentIndex] : null
         startQueue(entry ? entry.entryId : "")
     }
 
+    function openYouTubePlaylistInput() {
+        if (youtubeImporting)
+            return
+        youtubeInputVisible = true
+        youtubeUrlInput.text = ""
+        Qt.callLater(function() { youtubeUrlInput.forceActiveFocus() })
+    }
+
+    function restoreKeyboardFocus() {
+        youtubeUrlInput.focus = false
+        itemsRoot.focus = true
+        itemsRoot.forceActiveFocus()
+    }
+
+    function closeYouTubePlaylistInput() {
+        if (youtubeImporting) {
+            youtubeInputVisible = false
+            restoreKeyboardFocus()
+            localFilesBackend.cancelYouTubePlaylistImport()
+            return
+        }
+        youtubeInputVisible = false
+        restoreKeyboardFocus()
+    }
+
+    function submitYouTubePlaylist() {
+        if (youtubeImporting)
+            return
+        var value = youtubeUrlInput.text.trim()
+        if (value === "") {
+            statusMessage = "PASTE A YOUTUBE PLAYLIST URL"
+            statusTimer.restart()
+            return
+        }
+        localFilesBackend.importYouTubePlaylist(value)
+    }
+
     function handleKey(event) {
-        if (clearConfirmationVisible)
+        if (clearConfirmationVisible || youtubeInputVisible)
             return
         if (event.key === Qt.Key_R) {
             cycleRepeatMode()
@@ -243,6 +283,29 @@ FocusScope {
     Connections {
         target: localFilesBackend
         function onQueueChanged(kind, values) { syncQueue(kind, values) }
+        function onYoutubePlaylistImportStarted() {
+            youtubeImporting = true
+            statusMessage = "LOADING YOUTUBE PLAYLIST"
+            statusTimer.stop()
+        }
+        function onYoutubePlaylistImportFinished(addedCount) {
+            youtubeImporting = false
+            youtubeInputVisible = false
+            youtubeUrlInput.text = ""
+            statusMessage = addedCount === 1 ? "ADDED 1 YOUTUBE TRACK"
+                                             : "ADDED " + addedCount + " YOUTUBE TRACKS"
+            statusTimer.restart()
+            restoreKeyboardFocus()
+        }
+        function onYoutubePlaylistImportFailed(message) {
+            youtubeImporting = false
+            statusMessage = message || "COULD NOT LOAD YOUTUBE PLAYLIST"
+            statusTimer.restart()
+            if (youtubeInputVisible)
+                youtubeUrlInput.forceActiveFocus()
+            else
+                restoreKeyboardFocus()
+        }
     }
 
     AppBar {
@@ -308,10 +371,10 @@ FocusScope {
         model: visibleQueue
         anchors.top: parent.top
         anchors.left: parent.left
-        anchors.topMargin: root.sh * 0.25
+        anchors.topMargin: root.sh * (queueKind === "soundtrack" ? 0.31875 : 0.25)
         anchors.leftMargin: root.sw * 0.596875
         width: root.sw * 0.37
-        height: root.sh * 0.525
+        height: root.sh * (queueKind === "soundtrack" ? 0.45625 : 0.525)
         clip: true
         interactive: false
 
@@ -323,6 +386,31 @@ FocusScope {
             selected: activePane === 1 && queueList.currentIndex === index
             normalColor: modelData.status === "failed" ? root.tertiaryColor : root.primaryColor
             textSize: root.sh * 0.0270833
+        }
+    }
+
+    Rectangle {
+        visible: queueKind === "soundtrack"
+        anchors.top: parent.top
+        anchors.left: parent.left
+        anchors.topMargin: root.sh * 0.25
+        anchors.leftMargin: root.sw * 0.596875
+        width: root.sw * 0.37
+        height: root.sh * 0.0520833
+        color: root.surfaceColor
+        border.color: activePane === 1 ? root.accentColor : root.tertiaryColor
+        border.width: root.sh * 0.003125
+
+        Text {
+            anchors.centerIn: parent
+            width: parent.width - root.sw * 0.0125
+            text: youtubeImporting ? "LOADING YOUTUBE PLAYLIST..." : "+ ADD YOUTUBE PLAYLIST"
+            color: activePane === 1 ? root.secondaryColor : root.primaryColor
+            font.family: root.globalFont
+            font.capitalization: Font.AllUppercase
+            horizontalAlignment: Text.AlignHCenter
+            elide: Text.ElideRight
+            font.pixelSize: root.sh * 0.025
         }
     }
 
@@ -363,7 +451,9 @@ FocusScope {
     Text {
         text: activePane === 0
               ? "[ENTER]:DETAIL [TAB/RIGHT]:QUEUE [R]:REPEAT [S]:SHUFFLE [T]:QUEUE TYPE [ESC]:BACK"
-              : "[ENTER]:PLAY [SHIFT+UP/DOWN]:MOVE [DEL]:REMOVE [C]:CLEAR [T]:QUEUE TYPE"
+              : (queueKind === "soundtrack"
+                 ? "[ENTER]:ADD YOUTUBE [SHIFT+UP/DOWN]:MOVE [DEL]:REMOVE [C]:CLEAR [T]:QUEUE TYPE"
+                 : "[ENTER]:PLAY [SHIFT+UP/DOWN]:MOVE [DEL]:REMOVE [C]:CLEAR [T]:QUEUE TYPE")
         color: root.tertiaryColor
         font.family: root.globalFont
         anchors.bottom: parent.bottom
@@ -389,6 +479,81 @@ FocusScope {
         onRejected: {
             clearConfirmationVisible = false
             itemsRoot.forceActiveFocus()
+        }
+    }
+
+    Rectangle {
+        visible: youtubeInputVisible
+        z: 100
+        anchors.centerIn: parent
+        width: root.sw * 0.75
+        height: root.sh * 0.29
+        color: root.surfaceColor
+        border.color: root.accentColor
+        border.width: root.sh * 0.0041667
+
+        Text {
+            text: "ADD YOUTUBE PLAYLIST"
+            color: root.secondaryColor
+            font.family: root.globalFont
+            font.capitalization: Font.AllUppercase
+            anchors.top: parent.top
+            anchors.left: parent.left
+            anchors.topMargin: root.sh * 0.0333333
+            anchors.leftMargin: root.sw * 0.025
+            font.pixelSize: root.sh * 0.0333333
+        }
+
+        Rectangle {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.leftMargin: root.sw * 0.025
+            anchors.rightMargin: root.sw * 0.025
+            anchors.topMargin: root.sh * 0.1
+            height: root.sh * 0.0666667
+            color: root.surfaceColor
+            border.color: youtubeUrlInput.activeFocus ? root.accentColor : root.tertiaryColor
+            border.width: root.sh * 0.003125
+
+            TextInput {
+                id: youtubeUrlInput
+                anchors.fill: parent
+                anchors.leftMargin: root.sw * 0.0125
+                anchors.rightMargin: root.sw * 0.0125
+                color: root.primaryColor
+                selectionColor: root.accentColor
+                selectedTextColor: root.surfaceColor
+                font.family: root.globalFont
+                font.pixelSize: root.sh * 0.025
+                verticalAlignment: TextInput.AlignVCenter
+                clip: true
+                readOnly: youtubeImporting
+                inputMethodHints: Qt.ImhUrlCharactersOnly | Qt.ImhNoPredictiveText |
+                                  Qt.ImhNoAutoUppercase
+                Keys.onPressed: function(event) {
+                    if (event.key === Qt.Key_Escape || event.key === Qt.Key_Back) {
+                        closeYouTubePlaylistInput()
+                        event.accepted = true
+                    } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                        submitYouTubePlaylist()
+                        event.accepted = true
+                    }
+                }
+            }
+        }
+
+        Text {
+            text: youtubeImporting ? "LOADING PLAYLIST..."
+                                   : "PASTE URL, THEN PRESS ENTER  -  [ESC]:CANCEL"
+            color: youtubeImporting ? root.secondaryColor : root.tertiaryColor
+            font.family: root.globalFont
+            font.capitalization: Font.AllUppercase
+            anchors.left: parent.left
+            anchors.bottom: parent.bottom
+            anchors.leftMargin: root.sw * 0.025
+            anchors.bottomMargin: root.sh * 0.0333333
+            font.pixelSize: root.sh * 0.025
         }
     }
 

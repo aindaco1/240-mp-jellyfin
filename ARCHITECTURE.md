@@ -303,12 +303,13 @@ Local lives in `modules/local_files/` and `src/modules/local_files/` and incorpo
 
 - `Items.qml` is a two-pane file browser and queue editor. The right pane switches between the media and soundtrack queues; both support duplicates, move, remove, and confirmed clear operations.
 - `Detail.qml` preserves Play Now and adds queue actions after track selection. Media playlists expand into video/image entries; soundtrack playlists expand into audio entries.
-- `local_queue.json` stores both queues in one schema-versioned, owner-only atomic file. Entries use UUID identity, are capped at 1,000 per queue, and are revalidated under the active media root when loaded or when that root changes.
+- `local_queue.json` stores both queues in one schema-versioned, owner-only atomic file. Entries use UUID identity and are capped at 1,000 per queue. Local entries are revalidated under the active media root when loaded or when that root changes; YouTube soundtrack entries retain only a validated video ID and bounded display title.
 - Playlist import accepts local relative, absolute, or `file:` entries only. Remote schemes, root escapes, cycles, newline-containing paths, excessive nesting, unsupported types, and missing files are rejected before persistence.
 - `preparePlayback()` writes an owner-only `local_queue.m3u8` and returns the exact entry snapshot matching mpv's playlist order. Shuffle keeps the selected item first without mutating the saved queue.
 - Queue completion leaves entries in place. Item errors persist as a visible failed state until a successful retry or manual removal.
 - Repeat Off maps to normal playlist completion, Repeat Queue to `--loop-playlist=inf`, and Repeat One to `--loop-file=inf` through the shared named mpv options path.
-- A non-empty soundtrack queue mutes the main media process and loops through a separate bundled-mpv process. Unexpected soundtrack exits use bounded exponential-backoff recovery; explicit stop cancels recovery.
+- The soundtrack pane accepts a pasted public or unlisted YouTube playlist URL. `LocalFilesBackend` canonicalizes the input to a YouTube playlist URL, runs the pinned yt-dlp/Deno pair asynchronously with bounded output/runtime, and atomically appends one persistent entry per valid video in source order. Those entries use the same move/remove/clear queue operations as local audio and stream through the separate mpv process without downloading a cache.
+- A non-empty soundtrack queue sets `muteMainAudio` in the media playback plan, causing the main mpv process to use `--no-audio`, and loops playable soundtrack entries through a separate bundled-mpv process. Unexpected soundtrack exits use bounded exponential-backoff recovery; explicit stop cancels recovery.
 - Auto-launch starts only a non-empty saved media queue. The media root remains configurable and defaults to `~/Desktop`; the retired Loop directory is not migrated.
 
 ## Track Selection

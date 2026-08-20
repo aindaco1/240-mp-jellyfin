@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(240mp VERSION 1.5.0 LANGUAGES CXX)
+project(240mp VERSION 1.5.1 LANGUAGES CXX)
 
 if(NOT APPLE)
     message(FATAL_ERROR "This fork is macOS-only. Configure and build it on macOS.")
@@ -13,7 +13,7 @@ set(CMAKE_AUTOMOC ON)
 # is reached through a symlink such as macOS's /tmp -> /private/tmp.
 set(CMAKE_AUTOMOC_PATH_PREFIX ON)
 set(APP_DISPLAY_NAME "240-mp-jellyfin")
-set(APP_RELEASE_TAG "v1.5.0")
+set(APP_RELEASE_TAG "v1.5.1")
 set(APP_BUNDLE_IDENTIFIER "com.240mp.jellyfin" CACHE STRING "macOS bundle identifier")
 set(APP_UPDATE_REPOSITORY "aindaco1/240-mp-jellyfin" CACHE STRING "GitHub update repository")
 set(APP_UPDATE_TEAM_ID "PWT3Q52LZ2" CACHE STRING "Expected Developer ID team for updates")
@@ -181,6 +181,10 @@ if(BUILD_TESTING)
         tests/LocalFilesBackendTest.cpp
         src/modules/local_files/LocalFilesBackend.cpp
         src/tools/HelperResolver.cpp
+    )
+    target_compile_definitions(local_files_backend_tests PRIVATE
+        DEV_YT_DLP_EXECUTABLE="${YT_DLP_EXECUTABLE}"
+        DEV_DENO_EXECUTABLE="${DENO_EXECUTABLE}"
     )
     target_include_directories(local_files_backend_tests PRIVATE src)
     target_link_libraries(local_files_backend_tests PRIVATE Qt6::Core Qt6::Test)

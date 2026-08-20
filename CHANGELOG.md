@@ -4,6 +4,21 @@ All notable changes to 240-mp-jellyfin are documented here.
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-08-19
+
+### Added
+
+- Added a pasteable YouTube playlist action to Local's soundtrack pane. Public and unlisted playlists expand through the pinned yt-dlp/Deno helpers into persistent, individually reorderable entries that retain the playlist's source order and stream audio on demand.
+
+### Fixed
+
+- Made Local media-queue playback derive its main-video mute decision directly from whether the soundtrack queue is non-empty, with regression coverage through the backend playback plan and mpv's `--no-audio` launch argument.
+- Restored Local's queue keyboard focus after a YouTube playlist import completes or is canceled.
+
+### Security
+
+- Restricted Local's new remote soundtrack support to validated HTTPS YouTube playlist inputs and canonical per-video watch URLs. Imported IDs, titles, output size, queue capacity, helper runtime, and persisted state remain bounded; arbitrary remote Local playlist entries are still rejected, and helper diagnostics that may echo submitted URLs are discarded.
+
 ## [1.5.0] - 2026-08-18
 
 ### Added

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QByteArray>
 #include <QObject>
 #include <QProcess>
 #include <QSet>
@@ -39,6 +40,8 @@ public:
     Q_INVOKABLE QVariantMap preparePlayback(const QString &startEntryId,
                                             bool shuffle = false);
     Q_INVOKABLE QStringList soundtrackPaths(bool shuffle = false) const;
+    Q_INVOKABLE bool importYouTubePlaylist(const QString &url);
+    Q_INVOKABLE void cancelYouTubePlaylistImport();
 
     Q_INVOKABLE void startAudio(const QStringList &paths, bool shuffle = false);
     Q_INVOKABLE void stopAudio();
@@ -53,6 +56,9 @@ public:
 signals:
     void dynamicOptionsReady(const QString &key, const QVariant &options);
     void queueChanged(const QString &kind, const QVariant &items);
+    void youtubePlaylistImportStarted();
+    void youtubePlaylistImportFinished(int addedCount);
+    void youtubePlaylistImportFailed(const QString &message);
 
 public slots:
     void onSettingChanged(const QString &moduleId, const QString &key,
@@ -60,9 +66,10 @@ public slots:
 
 private slots:
     void onAudioProcessFinished();
+    void onYouTubePlaylistProcessFinished(int exitCode, QProcess::ExitStatus exitStatus);
 
 private:
-    static constexpr int kQueueSchemaVersion = 1;
+    static constexpr int kQueueSchemaVersion = 2;
     static constexpr int kMaxQueueEntries = 1000;
     static constexpr int kMaxPlaylistDepth = 8;
 
@@ -74,6 +81,10 @@ private:
     bool isPathWithinMediaRoot(const QString &path) const;
     bool queueKindAcceptsPath(const QString &kind, const QString &path) const;
     bool isValidQueueKind(const QString &kind) const;
+    static bool isValidYouTubeVideoId(const QString &videoId);
+    static QString canonicalYouTubeVideoUrl(const QString &videoId);
+    static QString canonicalYouTubePlaylistUrl(const QString &input);
+    static bool isCanonicalYouTubeVideoUrl(const QString &url);
 
     QVariantList &mutableQueue(const QString &kind);
     const QVariantList &queue(const QString &kind) const;
@@ -89,6 +100,9 @@ private:
     bool publishQueues(const QString &changedKind);
     void pruneQueuesForMediaRoot();
     QString writePlaybackPlaylist(const QVariantList &entries) const;
+    void consumeYouTubePlaylistOutput(bool includeRemainder = false);
+    void consumeYouTubePlaylistLine(const QByteArray &line);
+    void clearYouTubePlaylistProcess();
 
     void launchAudioProcess();
 
@@ -104,4 +118,10 @@ private:
     bool m_audioStopRequested = true;
     int m_audioRespawnCount = 0;
     quint64 m_audioGeneration = 0;
+
+    QProcess *m_youtubePlaylistProcess = nullptr;
+    QByteArray m_youtubePlaylistOutputBuffer;
+    QVariantList m_youtubePlaylistEntries;
+    bool m_youtubePlaylistOutputOverflow = false;
+    quint64 m_youtubePlaylistGeneration = 0;
 };

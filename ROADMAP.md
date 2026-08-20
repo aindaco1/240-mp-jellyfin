@@ -2,6 +2,11 @@
 
 Version 1.1 completed the fork's daily-use Apple Silicon macOS foundation. Future work stays focused on reliability and depth in the existing modules rather than expanding platform or module scope.
 
+## Shipped In 1.5.1
+
+- Local YouTube soundtrack playlist import with persistent ordered/reorderable entries and audio-only streaming through bundled helpers.
+- Explicit main-video muting for every non-empty Local soundtrack queue during media-queue playback.
+
 ## Prepared For 1.5.0
 
 - A research-grade, CC0-only iNaturalist Nature montage with compact name/species/location display, metadata-only offline cache, and keyboard refresh/source controls.
