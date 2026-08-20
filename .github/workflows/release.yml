@@ -255,6 +255,16 @@ jobs:
             test -n "$sample"
           done
 
+          local_playlist_sample=$(env -i HOME="$HELPER_HOME" PATH=/usr/bin:/bin \
+            "$BIN/yt-dlp" --no-config --no-update --no-cache-dir --no-warnings \
+            --no-progress --ignore-errors --flat-playlist --lazy-playlist \
+            --dump-json --playlist-end 1 \
+            --js-runtimes "deno:$BIN/deno" \
+            'https://www.youtube.com/playlist?list=PLt5yu3-wZAlSLRHmI1qNm0wjyVNWw1pCU' \
+            | /usr/bin/python3 -c \
+              'import json,sys; print(json.loads(sys.stdin.readline()).get("id", ""))')
+          test "$local_playlist_sample" = "aqz-KE-bpKQ"
+
       - name: Prepare notarization credentials
         env:
           APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}

@@ -11,7 +11,9 @@ FocusScope {
     property string repeatMode: navParams.repeatMode || "off"
     property bool shuffled: navParams.shuffled || false
     property var soundtrackPaths: navParams.soundtrackPaths || []
-    property bool hasSoundtrack: soundtrackPaths.length > 0
+    property bool hasSoundtrack: navParams.muteMainAudio !== undefined
+                                ? navParams.muteMainAudio === true
+                                : soundtrackPaths.length > 0
 
     property int currentIndex: Math.min(Math.max(0, startIndex), Math.max(0, entries.length - 1))
     property int lastPositionMs: 0
@@ -63,7 +65,7 @@ FocusScope {
             imageDurationSeconds: imageDurationSeconds,
             muteAudio: hasSoundtrack
         })
-        if (hasSoundtrack)
+        if (soundtrackPaths.length > 0)
             localFilesBackend.startAudio(soundtrackPaths, false)
     }
 

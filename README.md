@@ -62,10 +62,11 @@ Not yet implemented: music libraries and explicit watched/unwatched controls fro
 - The first view shows the configurable media directory, defaulting to `~/Desktop`.
 - Common video file support: `mp4`, `mkv`, `avi`, `mov`, `m4v`, `webm`, `wmv`, `flv`, `f4v`, `mpg`, `mpeg`, `vob`.
 - Still images and common audio files; audio can be collected in an independent soundtrack queue.
+- A pasteable YouTube playlist action in the soundtrack pane expands public or unlisted playlists into persistent, individually reorderable video entries in source order and streams them audio-only through the bundled helpers.
 - Local-only `m3u` and `m3u8` imports expand into validated, root-contained queue entries with bounded nesting and queue size.
 - Persistent, duplicate-friendly media and soundtrack queues with reorder, remove, and clear controls. Completed media remains queued; failed media stays visibly marked.
 - Repeat Off, Repeat Queue, Repeat One, queue shuffle, soundtrack shuffle, and optional saved-queue auto-launch.
-- A non-empty soundtrack queue loops in a separate bounded-recovery mpv process while the media queue plays muted.
+- Any non-empty soundtrack queue loops in a separate bounded-recovery mpv process while media-queue video audio is muted.
 - Resume history.
 - Play Now and Add to Queue actions after audio and subtitle selection; queued entries retain their file-specific track choices.
 - Sidecar subtitle discovery for common subtitle formats.
@@ -109,7 +110,7 @@ APP_ROOT=$(pwd) ./build/240-mp-jellyfin.app/Contents/MacOS/240-mp-jellyfin
 
 ## Install
 
-See [INSTALL.md](INSTALL.md). [Download 240-mp-jellyfin 1.5.0 for Apple Silicon](https://github.com/aindaco1/240-mp-jellyfin/releases/download/v1.5.0/240-mp-jellyfin-v1.5.0-macOS-arm64.dmg), open the notarized DMG, and drag the app onto its Applications shortcut. If EasyDMG is already configured as the Mac's default DMG handler, the same single-app image can automate that copy; no additional installer is required. Checksums and release notes remain available from [GitHub Releases](https://github.com/aindaco1/240-mp-jellyfin/releases).
+See [INSTALL.md](INSTALL.md). [Download 240-mp-jellyfin 1.5.1 for Apple Silicon](https://github.com/aindaco1/240-mp-jellyfin/releases/download/v1.5.1/240-mp-jellyfin-v1.5.1-macOS-arm64.dmg), open the notarized DMG, and drag the app onto its Applications shortcut. If EasyDMG is already configured as the Mac's default DMG handler, the same single-app image can automate that copy; no additional installer is required. Checksums and release notes remain available from [GitHub Releases](https://github.com/aindaco1/240-mp-jellyfin/releases).
 
 Signed releases can check, download, verify, and install later versions from **Settings → Software Update**. The updater verifies GitHub's SHA-256 digest, Apple notarization, the Developer ID team, bundle identity, version, and Apple Silicon architecture before replacing the app.
 
@@ -137,7 +138,7 @@ User configuration is stored outside the app bundle:
   nature_observations.json
 ```
 
-`jellyfin_auth.json` stores the Jellyfin server URL, access token, user ID, username, server identity, and client device ID. Passwords are not persisted. Karaoke files contain public catalog metadata, queue state, and validated canonical YouTube watch URLs; they contain no credentials. Local files contain owner-only resume state, root-contained local paths, queue UUIDs, track choices, and a generated local playlist. `nature_observations.json` is a bounded metadata-only cache of validated public observations and CC0 photo URLs; image files are not stored.
+`jellyfin_auth.json` stores the Jellyfin server URL, access token, user ID, username, server identity, and client device ID. Passwords are not persisted. Karaoke files contain public catalog metadata, queue state, and validated canonical YouTube watch URLs; they contain no credentials. Local files contain owner-only resume state, root-contained local paths, queue UUIDs, track choices, validated YouTube video IDs/titles for imported soundtrack entries, and a generated local media playlist. `nature_observations.json` is a bounded metadata-only cache of validated public observations and CC0 photo URLs; image files are not stored.
 
 ## Security Notes
 
@@ -145,6 +146,7 @@ User configuration is stored outside the app bundle:
 - Jellyfin playback tokens are sent to mpv through a temporary private mpv config include instead of command-line header arguments.
 - Jellyfin stream URLs do not include `api_key` tokens.
 - Playback logs redact known token query parameters.
+- Local accepts remote soundtrack input only through validated public/unlisted YouTube playlist URLs and persists canonical video identities rather than submitted URLs.
 - Nature requests are anonymous and cached Nature photo URLs are revalidated against the CC0 and trusted-host policy before reuse.
 
 ## License

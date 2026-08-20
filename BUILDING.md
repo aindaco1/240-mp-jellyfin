@@ -77,7 +77,7 @@ On macOS all user configuration is stored at:
   karaoke_queue.json   ← persistent Karaoke queue
   karaoke_queue.m3u8   ← generated canonical playback URLs
   local_files_history.json ← Local resume history
-  local_queue.json     ← persistent Local media and soundtrack queues
+  local_queue.json     ← persistent Local media and soundtrack queues, including validated YouTube soundtrack entries
   local_queue.m3u8     ← generated root-contained Local playback paths
   nature_observations.json ← cached public iNaturalist metadata (no image files)
 ```
@@ -161,7 +161,7 @@ The intended workflow is a macOS Apple Silicon build:
 | `build-macos-arm64` | `macos-26` (arm64) | Notarized app artifact |
 | `package-macos-arm64` | `macos-26` (arm64) | `240-mp-jellyfin-<tag>-macOS-arm64.dmg` |
 
-The first macOS 26 job installs Qt and packaging tools from the Apple Silicon runner's Homebrew snapshot, configures CMake for `arm64`, downloads and verifies pinned yt-dlp/Deno, builds and tests, embeds all helpers, runs `macdeployqt` without its temporary ad-hoc signing, prunes unused QML plugins, verifies every Mach-O file under a stripped environment (including one live extraction from each Karaoke source), rejects `.DS_Store`, broken symlinks, and external load paths, then Developer-ID signs, notarizes, and staples the app. The notarized app crosses jobs only as a `ditto` ZIP so signatures, entitlements, and the stapled ticket survive intact. A fresh macOS 26 job verifies that sealed app, stages exactly the app plus an `/Applications` shortcut, validates that layout with `scripts/macos_dmg_contract.zsh`, downloads checksum-pinned `rcodesign` 0.29.0, creates and Developer-ID signs the DMG, verifies the embedded signing certificate's team against the app, validates the image checksum, notarizes and staples it, mounts it read-only to recheck the shared layout and app contract, validates Gatekeeper acceptance, and publishes the DMG plus its SHA-256 checksum.
+The first macOS 26 job installs Qt and packaging tools from the Apple Silicon runner's Homebrew snapshot, configures CMake for `arm64`, downloads and verifies pinned yt-dlp/Deno, builds and tests, embeds all helpers, runs `macdeployqt` without its temporary ad-hoc signing, prunes unused QML plugins, verifies every Mach-O file under a stripped environment (including one live extraction from each Karaoke source and one Local playlist expansion canary), rejects `.DS_Store`, broken symlinks, and external load paths, then Developer-ID signs, notarizes, and staples the app. The notarized app crosses jobs only as a `ditto` ZIP so signatures, entitlements, and the stapled ticket survive intact. A fresh macOS 26 job verifies that sealed app, stages exactly the app plus an `/Applications` shortcut, validates that layout with `scripts/macos_dmg_contract.zsh`, downloads checksum-pinned `rcodesign` 0.29.0, creates and Developer-ID signs the DMG, verifies the embedded signing certificate's team against the app, validates the image checksum, notarizes and staples it, mounts it read-only to recheck the shared layout and app contract, validates Gatekeeper acceptance, and publishes the DMG plus its SHA-256 checksum.
 
 The in-app updater consumes the same release. GitHub's API asset digest is mandatory, and the downloaded bundle must pass notarization, signature-team, bundle-ID, version, and arm64 checks before installation.
 
@@ -215,6 +215,12 @@ The Karaoke backend suite skips its network integration case by default. Run it 
 ```bash
 KARAOKE_LIVE_TEST=1 ./build/karaoke_backend_tests refreshesLiveCatalog
 KARAOKE_LIVE_TEST=1 ./build/karaoke_backend_tests prefetchesLivePlaybackMedia
+```
+
+Local's backend suite skips its public YouTube playlist canary by default. Run it when changing playlist validation, expansion, or the pinned helpers:
+
+```bash
+LOCAL_FILES_LIVE_TEST=1 ./build/local_files_backend_tests importsLiveYouTubePlaylist
 ```
 
 Nature's backend suite also skips its real-service canary by default. Run it when changing the request, license, or response policy:
