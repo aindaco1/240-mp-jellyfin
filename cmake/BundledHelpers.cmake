@@ -90,7 +90,7 @@ set(_yt_dlp_licenses "${_helper_cache}/yt-dlp-THIRD_PARTY_LICENSES.txt")
 download_verified(
     "https://raw.githubusercontent.com/yt-dlp/yt-dlp/${YT_DLP_VERSION}/THIRD_PARTY_LICENSES.txt"
     "${_yt_dlp_licenses}"
-    "b085c65586a953cdb4b13c6390d63ec984d66912e4b6a19e66ba3582f2ed104b")
+    "472aefe951c7db35e1657c1d13fd337140511ed6f2b329205105ad441c5a02b7")
 
 set(_yt_dlp_license "${_helper_cache}/yt-dlp-LICENSE")
 download_verified(
